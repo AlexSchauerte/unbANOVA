@@ -35,7 +35,7 @@ marginalEffects <- function(means, freq, k.levels = NULL, type = c("I", "II", "I
   #cat(paste0("k.levels = ", paste0(k.levels, collapse = ""), " [marginalEffects]\n"))
 
   effectCalc <- function(mMeans, x.levels = nrow(means)){
-    unlist(sapply(1:(x.levels-1), function(x){sapply((x+1):x.levels, function(y){setNames(mMeans[y] - mMeans[x], paste0(x," -> ", y))})}))
+    unlist(sapply(1:(x.levels-1), function(x){sapply((x+1):x.levels, function(y){setNames(mMeans[y] - mMeans[x], paste0(y," - ", x))})}))
   }
 
   return(purrr::compact(list(

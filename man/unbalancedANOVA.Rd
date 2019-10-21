@@ -9,7 +9,7 @@ unbalancedANOVA(
   freq,
   k.levels = NULL,
   type = c("I", "II", "III", "ATE"),
-  fixed = c(NA, NA, NA)
+  fixed = NULL
 )
 }
 \arguments{

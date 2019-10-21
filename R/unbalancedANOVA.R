@@ -8,7 +8,7 @@
 #' @param fixed numeric vector with the levels the corresponding covariates should be fixed to (NA for no fixing)
 #' @keywords anova
 #' @export
-unbalancedANOVA <- function(means, freq, k.levels = NULL, type = c("I", "II", "III", "ATE"), fixed = c(NA,NA,NA)){
+unbalancedANOVA <- function(means, freq, k.levels = NULL, type = c("I", "II", "III", "ATE"), fixed = NULL){
   # checks
   if(!(is.matrix(means))) stop("'means' is not a matrix.")
   if(!(is.matrix(freq))) stop("'freq' is not a matrix.")

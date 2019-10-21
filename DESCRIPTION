@@ -14,12 +14,12 @@ LazyData: true
 Imports: 
     bsplus,
     shinydashboard,
-    shinycssloaders,
     shinyWidgets,
     rhandsontable,
     fontawesome,
     rlist,
     matrixcalc,
     purrr,
-    ggplot2
+    ggplot2,
+    shiny
 RoxygenNote: 6.1.99.9000
