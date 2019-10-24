@@ -419,11 +419,11 @@ unbanovaShiny <- function(){
     #### Header ####
     shinydashboard::dashboardHeader(
       title = "unbalancedANOVA",
-      titleWidth = 250
+      titleWidth = "20%"
     ),
     #### Sidebar ####
     shinydashboard::dashboardSidebar(
-      width = 250,
+      width = "20%",
       shinydashboard::sidebarMenu(id = "sidebarmenu",
         shinydashboard::menuItem("treatment & covariates", tabName = "a"),
         shiny::conditionalPanel("input.sidebarmenu === 'a'",
