@@ -1,13 +1,15 @@
 Package: unbANOVA
-Title: What the Package Does (One Line, Title Case)
-Version: 0.0.0.9000
+Title: Compare ANOVA Types & Learn About their Differences
+    in Unbalanced Designs.
+Version: 0.9
 Authors@R: 
-    person(given = "First",
-           family = "Last",
+    person(given = "Alexander J.",
+           family = "Schauerte",
            role = c("aut", "cre"),
-           email = "first.last@example.com",
-           comment = c(ORCID = "YOUR-ORCID-ID"))
-Description: What the package does (one paragraph).
+           email = "alexander.joseph.schauerte@uni-jena.de")
+Description: This package provides tools to compare the
+    results of ANOVA type I, II and III and the average treatment effect
+    in unbalanced designs.
 License: What license it uses
 Encoding: UTF-8
 LazyData: true
