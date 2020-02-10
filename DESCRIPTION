@@ -23,5 +23,6 @@ Imports:
     matrixcalc,
     purrr,
     ggplot2,
-    shiny
-RoxygenNote: 6.1.99.9000
+    shiny,
+    shinyMatrix
+RoxygenNote: 7.0.2
