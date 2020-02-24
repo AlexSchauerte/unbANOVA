@@ -7,8 +7,8 @@ print.unbANOVA <- function(g){
 #' @export
 summary.unbANOVA <- function(g){
   ans <- list()
-  ans$`Marginal Means` <- cbind(`Anova 1` = g$anova1$marginalMeans, `Anova 2` = g$anova2$marginalMeans, `Anova 3` = g$anova3$marginalMeans, `ATE` = g$ATE$marginalMeans)
-  ans$`Sum of Squares` <- matrix(c(g$anova1$SS, g$anova2$SS, g$anova3$SS, g$ATE$SS), 1, dimnames = list("     ", c("Anova 1", "Anova 2", "Anova 3", "ATE")))
+  ans$`Marginal Means` <- cbind(`ANOVA I` = g$anova1$marginalMeans, `ANOVA II` = g$anova2$marginalMeans, `ANOVA III` = g$anova3$marginalMeans, `ATE` = g$ATE$marginalMeans)
+  ans$`Sum of Squares` <- matrix(c(g$anova1$SS, g$anova2$SS, g$anova3$SS, g$ATE$SS), 1, dimnames = list("     ", c("ANOVA I", "ANOVA II", "ANOVA III", "ATE")))
   ans$`Is data balanced?` <- g$attr$isBalanced
   ans$`Is data proportional?` <- g$attr$isProportional
   ans$`Is data free of interaction?` <- g$attr$isInteractionfree
@@ -19,12 +19,12 @@ summary.unbANOVA <- function(g){
 #' @export
 effects.unbANOVA <- function(g, reference.group = NULL){
   if(is.null(reference.group)){
-    return(cbind(`Anova 1` = g$anova1$effects, `Anova 2` = g$anova2$effects, `Anova 3` = g$anova3$effects, `ATE` = g$ATE$effects))
+    return(cbind(`ANOVA I` = g$anova1$effects, `ANOVA II` = g$anova2$effects, `ANOVA III` = g$anova3$effects, `ATE` = g$ATE$effects))
   } else if(reference.group %in% 1:length(g$anova1$marginalMeans)) {
-    return(cbind(`Anova 1` = setNames(g$anova1$marginalMeans[-reference.group] - g$anova1$marginalMeans[reference.group], paste0((1:length(g$anova1$marginalMeans))[-reference.group], " - ", reference.group)),
-                           `Anova 2` = setNames(g$anova2$marginalMeans[-reference.group] - g$anova2$marginalMeans[reference.group], paste0((1:length(g$anova2$marginalMeans))[-reference.group], " - ", reference.group)),
-                           `Anova 3` = setNames(g$anova3$marginalMeans[-reference.group] - g$anova3$marginalMeans[reference.group], paste0((1:length(g$anova3$marginalMeans))[-reference.group], " - ", reference.group)),
-                           `ATE`     = setNames(g$ATE$marginalMeans[-reference.group] - g$ATE$marginalMeans[reference.group], paste0((1:length(g$ATE$marginalMeans))[-reference.group], " - ", reference.group))))
+    return(cbind(`ANOVA I` = setNames(g$anova1$marginalMeans[-reference.group] - g$anova1$marginalMeans[reference.group], paste0((1:length(g$anova1$marginalMeans))[-reference.group], " - ", reference.group)),
+                 `ANOVA II` = setNames(g$anova2$marginalMeans[-reference.group] - g$anova2$marginalMeans[reference.group], paste0((1:length(g$anova2$marginalMeans))[-reference.group], " - ", reference.group)),
+                 `ANOVA III` = setNames(g$anova3$marginalMeans[-reference.group] - g$anova3$marginalMeans[reference.group], paste0((1:length(g$anova3$marginalMeans))[-reference.group], " - ", reference.group)),
+                 `ATE`     = setNames(g$ATE$marginalMeans[-reference.group] - g$ATE$marginalMeans[reference.group], paste0((1:length(g$ATE$marginalMeans))[-reference.group], " - ", reference.group))))
   } else {
     stop("'reference.group' not valid level of x.")
   }
