@@ -27,8 +27,8 @@ marginalEffects <- function(means, freq, k.levels = NULL, type = c("I", "II", "I
     type <- type[type %in% c("I", 1, "II", 2, "III", 3, "ATE")]
   }
   if(!(all(is.na(fixed)))){
-    means <- matrix(means[,findConditionalColumns(fixed, k.levels)], nrow = nrow(me))
-    freq <- matrix(freq[,findConditionalColumns(fixed, k.levels)], nrow = nrow(me))
+    means <- matrix(means[,unbANOVA::findConditionalColumns(fixed, k.levels)], nrow = nrow(me))
+    freq <- matrix(freq[,unbANOVA::findConditionalColumns(fixed, k.levels)], nrow = nrow(me))
     k.levels <- k.levels[-which(!(is.na(fixed)))]
   }
 
@@ -39,9 +39,9 @@ marginalEffects <- function(means, freq, k.levels = NULL, type = c("I", "II", "I
   }
 
   return(purrr::compact(list(
-    anova1 = if(1 %in% type | "I" %in% type) effectCalc(marginalMeans(means, freq, k.levels = k.levels, type = 1)[[1]]),
-    anova2 = if(2 %in% type | "II" %in% type) effectCalc(marginalMeans(means, freq, k.levels = k.levels, type = 2)[[1]]),
-    anova3 = if(3 %in% type | "III" %in% type) effectCalc(marginalMeans(means, freq, k.levels = k.levels, type = 3)[[1]]),
-    ATE    = if("ATE" %in% type) effectCalc(marginalMeans(means, freq, k.levels = k.levels, type = "ATE")[[1]])
+    anova1 = if(1 %in% type | "I" %in% type) effectCalc(unbANOVA::marginalMeans(means, freq, k.levels = k.levels, type = 1)[[1]]),
+    anova2 = if(2 %in% type | "II" %in% type) effectCalc(unbANOVA::marginalMeans(means, freq, k.levels = k.levels, type = 2)[[1]]),
+    anova3 = if(3 %in% type | "III" %in% type) effectCalc(unbANOVA::marginalMeans(means, freq, k.levels = k.levels, type = 3)[[1]]),
+    ATE    = if("ATE" %in% type) effectCalc(unbANOVA::marginalMeans(means, freq, k.levels = k.levels, type = "ATE")[[1]])
   )))
 }

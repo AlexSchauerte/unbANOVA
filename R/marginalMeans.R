@@ -27,8 +27,8 @@ marginalMeans <- function(means, freq, k.levels = NULL, type = c("I", "II", "III
     type <- type[type %in% c("I", 1, "II", 2, "III", 3, "ATE")]
   }
   if(!(all(is.na(fixed)))){
-    means <- matrix(means[,findConditionalColumns(fixed, k.levels)], nrow = nrow(me))
-    freq <- matrix(freq[,findConditionalColumns(fixed, k.levels)], nrow = nrow(me))
+    means <- matrix(means[,unbANOVA::findConditionalColumns(fixed, k.levels)], nrow = nrow(me))
+    freq <- matrix(freq[,unbANOVA::findConditionalColumns(fixed, k.levels)], nrow = nrow(me))
     k.levels <- k.levels[-which(!(is.na(fixed)))]
     
     if(length(k.levels) == 0) k.levels <- 1
@@ -38,7 +38,7 @@ marginalMeans <- function(means, freq, k.levels = NULL, type = c("I", "II", "III
   
   # Anova II
   if(2 %in% type | "II" %in% type){
-    means_if <- calcInteractionfreeDataset(means, freq, k.levels)
+    means_if <- unbANOVA::calcInteractionfreeDataset(means, freq, k.levels)
   }
 
   return(purrr::compact(list(

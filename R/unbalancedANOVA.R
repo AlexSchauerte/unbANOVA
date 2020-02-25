@@ -27,24 +27,24 @@ unbalancedANOVA <- function(means, freq, k.levels = NULL, type = c("I", "II", "I
     type <- type[type %in% c("I", 1, "II", 2, "III", 3, "ATE")]
   }
   if(!(all(is.na(fixed)))){
-    means <- matrix(means[,findConditionalColumns(fixed, k.levels)], nrow = nrow(means))
-    freq <- matrix(freq[,findConditionalColumns(fixed, k.levels)], nrow = nrow(means))
+    means <- matrix(means[,unbANOVA::findConditionalColumns(fixed, k.levels)], nrow = nrow(means))
+    freq <- matrix(freq[,unbANOVA::findConditionalColumns(fixed, k.levels)], nrow = nrow(means))
     k.levels <- k.levels[-which(!(is.na(fixed)))]
     
     if(length(k.levels) == 0) k.levels <- 1
     #cat(paste0("k.levels = ", paste0(k.levels, collapse = ""), " [unbalancedANOVA]\n"))
   }
 
-  marginalMeans <- marginalMeans(means = means, freq = freq, k.levels = k.levels, type = type)
-  effects <- marginalEffects(means = means, freq = freq, k.levels = k.levels, type = type)
-  ss <- marginalSS(means = means, freq = freq, k.levels = k.levels, type = type)
+  marginalMeans <- unbANOVA::marginalMeans(means = means, freq = freq, k.levels = k.levels, type = type)
+  effects <- unbANOVA::marginalEffects(means = means, freq = freq, k.levels = k.levels, type = type)
+  ss <- unbANOVA::marginalSS(means = means, freq = freq, k.levels = k.levels, type = type)
 
   return(structure(.Data = purrr::compact(list(
           anova1 = if(1 %in% type | "I" %in% type) list(marginalMeans = marginalMeans$anova1, effects = effects$anova1, SS = ss$anova1),
           anova2 = if(2 %in% type | "II" %in% type) list(marginalMeans = marginalMeans$anova2, effects = effects$anova2, SS = ss$anova2),
           anova3 = if(3 %in% type | "III" %in% type) list(marginalMeans = marginalMeans$anova3, effects = effects$anova3, SS = ss$anova3),
           ATE    = if("ATE" %in% type) list(marginalMeans = marginalMeans$ATE, effects = effects$ATE, SS = ss$ATE),
-          attr   = list(isBalanced = isBalanced(freq), isProportional = isProportional(freq), isInteractionfree = isInteractionFree(means, freq, k.levels), interactionfreeMeans = calcInteractionfreeDataset(means, freq, k.levels)),
+          attr   = list(isBalanced = unbANOVA::isBalanced(freq), isProportional = unbANOVA::isProportional(freq), isInteractionfree = unbANOVA::isInteractionFree(means, freq, k.levels), interactionfreeMeans = unbANOVA::calcInteractionfreeDataset(means, freq, k.levels)),
           call   = list(means = means, frequencies = freq, x.levels = nrow(means), k.levels = k.levels, type = type, fixed = fixed)
          )),
          class = "unbANOVA"))

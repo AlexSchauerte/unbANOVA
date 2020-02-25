@@ -16,6 +16,7 @@ LazyData: true
 Imports: 
     bsplus,
     shinydashboard,
+    shinycssloaders,
     shinyWidgets,
     rhandsontable,
     fontawesome,
@@ -24,5 +25,6 @@ Imports:
     purrr,
     ggplot2,
     shiny,
-    shinythemes
+    shinythemes,
+    shinyjs
 RoxygenNote: 7.0.2

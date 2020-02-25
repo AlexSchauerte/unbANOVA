@@ -13,34 +13,22 @@ ui = shiny::fluidPage(
       .dropdown:hover>.dropdown-menu {
         display: block;
       }
+      
+      .bootstrap-switch .bootstrap-switch-handle-on.bootstrap-switch-primary {background-color: #e95420}
     "))
   ),
   theme = shinythemes::shinytheme("united"),
+  shinyjs::useShinyjs(),
   #shinythemes::themeSelector(),
   shiny::titlePanel("unbANOVA"),
   shiny::sidebarLayout(
     shiny::sidebarPanel(
       shiny::tabsetPanel(id = "inputs",
         shiny::tabPanel("Levels",
-          shiny::div(style = "width:100%; text-align:center; display:inline-block", shiny::uiOutput("levelstreat", inline = T), shiny::uiOutput("nrofcov", inline = T)),
-          shiny::uiOutput("factorinputs"),
-          shiny::hr(),
-          shiny::tabsetPanel(
-            shiny::tabPanel("example data",
-              shiny::br(),
-              shiny::selectInput("exampledata", label = NULL, choices = list("example data" = "",
-                                                                             "2 x 2" = "two_x_two",
-                                                                             "3 x 2 x 3" = "three_x_two_x_three",
-                                                                             "Maxwell, Delaney & Kelley (2017; p.361)" = "MaxDelKel2017_p361",
-                                                                             "Maxwell, Delaney & Kelley (2017; p.376)" = "MaxDelKel2017_p376")
-              ),
-              shiny::uiOutput("source")
-            ),
-            shiny::tabPanel("upload data",
-              shiny::br(),
-              shiny::fileInput("importset", NULL, width = "100%"),
-            )
-          )
+          shiny::uiOutput("theoreticalTab")
+        ),
+        shiny::tabPanel("data",
+            shiny::uiOutput("practicalTab")
         ),
         shiny::tabPanel("Means & Frequencies",
           shiny::strong("means:"),
@@ -48,28 +36,36 @@ ui = shiny::fluidPage(
           shiny::hr(),
           shiny::strong("freqs:"),
           rhandsontable::rHandsontableOutput("matrixfreqs")       
+        ),
+        shiny::tabPanel("", icon = shiny::icon("cogs"),
+          shiny::br(),
+          shiny::div(shinyWidgets::switchInput("showMeans", value = T, inline = T, size = "mini", offStatus = "dark"), "show marginal means"),
+          shiny::div(shinyWidgets::switchInput("showEffects", inline = T, size = "mini", offStatus = "dark"), "show effects"),
+          shiny::div(shinyWidgets::switchInput("showSS", value = T, inline = T, size = "mini"), "show sum of squares")
         )
       )
     ),
     shiny::mainPanel(
       shiny::tabsetPanel(
+        shiny::tabPanel("Overview",
+          shiny::strong("N = ", shiny::textOutput("sumfreq", inline = TRUE)), shiny::br(),
+          shiny::strong("number of cells: ", shiny::textOutput("countcells", inline = TRUE)), shiny::br(),
+          shiny::strong(shiny::textOutput("design"))
+        ),
+        shiny::tabPanel("PrintResult",
+          shiny::verbatimTextOutput("printresult")              
+        ),
         shiny::tabPanel("Results",
-          shiny::h3("Marginal Means"),
-          shiny::tableOutput("MarginalMeans"),
-          shiny::hr(),
-          shiny::h3("Effects"),
-          shiny::tableOutput("Effects"),
-          shiny::hr(),
-          shiny::h3("Sum of Squares"),
-          shiny::tableOutput("SumOfSquares"),
-          shiny::hr(),
+          shiny::uiOutput("marginalMeansDisplay"),
+          shiny::uiOutput("effectsDisplay"),
+          shiny::uiOutput("SSDisplay"),
           shiny::uiOutput("Attributes")
         ),
         shiny::navbarMenu("Graphs", icon = shiny::icon("chart-bar", "fa"),
-          shiny::tabPanel("ANOVA I", shiny::plotOutput("graph_anova1")),
-          shiny::tabPanel("ANOVA II", shiny::plotOutput("graph_anova2")),
-          shiny::tabPanel("ANOVA III", shiny::plotOutput("graph_anova3")),
-          shiny::tabPanel("ATE", shiny::plotOutput("graph_ate"))
+          shiny::tabPanel("ANOVA I", shinycssloaders::withSpinner(shiny::plotOutput("graph_anova1"))),
+          shiny::tabPanel("ANOVA II", shinycssloaders::withSpinner(shiny::plotOutput("graph_anova2"))),
+          shiny::tabPanel("ANOVA III", shinycssloaders::withSpinner(shiny::plotOutput("graph_anova3"))),
+          shiny::tabPanel("ATE", shinycssloaders::withSpinner(shiny::plotOutput("graph_ate")))
         )
       )
     )
@@ -78,79 +74,194 @@ ui = shiny::fluidPage(
 server = function(input, output, session){
   session$onSessionEnded(stopApp)
   
+  actions <- reactiveValues(freshstart = TRUE,
+                            freshupload = FALSE,
+                            freshchangeoflevels = FALSE,
+                            freshchangemeansorfreqs = FALSE)
+  
   #### . input stuff ####
-  factors <- shiny::reactiveValues()
+  mode <- shiny::reactiveVal({value = 0})
+  # mode = 0 --> theoretical
+  # mode = 1 --> practical
   
-  shiny::observe({
-    factors[[letters[1]]] <- if(!(is.null(input$factors))){input$factors}else{1}
-    factors[[letters[2]]] <- if(!(is.null(input$fact_1))){input$fact_1}else{2}
-    lapply(1:(shiny::isolate(factors$a)) + 2, function(i){
-      factors[[letters[i]]] <<- if(!(is.null(input[[paste0("fact_",i - 1)]]))){input[[paste0("fact_",i - 1)]]}else{2}
-    })
+  shiny::observeEvent({
+    input$mode
+  },{
+    mode((mode() + 1) %% 2)
   })
   
-  output$nrofcov <- shiny::renderUI({
-    shiny::div(style = "width:49%; display:inline-block", shiny::numericInput("factors", "number of categorial covariates", if(!(is.null(factors$a))){factors$a} else {1}, min = 1, max = 5, step = 1))
+  output$modeUI <- shiny::renderUI({
+    shiny::div(
+      shiny::br(),
+      strong("App is currently in a different mode. If you want to switch click below, but your current inputs will be lost."),
+      shiny::br(),
+      shiny::br(),
+      shiny::div(align="center", shiny::actionButton("mode", "Switch mode", icon = shiny::icon("sync-alt")))
+    )
   })
   
-  output$factorinputs <- shiny::renderUI({
-    if(factors$a + 1 > 1){
-      lapply(2:(factors$a + 1), function(i){
-        shiny::numericInput(paste0("fact_",i), shiny::HTML(paste0("number of levels of covariate K", shiny::tags$sub(i - 1))), if(!(is.null(factors[[letters[i + 1]]]))){factors[[letters[i + 1]]]} else {2}, min = 2, max = 5, step = 1)
-      })
+  nrofcov <- shiny::reactiveVal(value = 1)
+  
+  shiny::observeEvent({
+    input$add
+  },{
+    if(nrofcov() == 5) return(NULL)
+    shinyjs::show(id = paste0("fact_", nrofcov() + 2))
+    nrofcov(nrofcov() + 1)
+  })
+  
+  shiny::observeEvent({
+    input$hide
+  },{
+    if(nrofcov() == 1) return(NULL)
+    nrofcov(nrofcov() - 1)
+    shinyjs::hide(id = paste0("fact_", nrofcov() + 2))
+  })
+  
+  output$theoreticalTab <- shiny::renderUI({
+    if(!(mode())){
+      shiny::div(
+        shiny::numericInput("fact_1", paste0("number of levels of treatment X"), 2, min = 2, max = 5, step = 1),
+        shiny::numericInput("fact_2", shiny::HTML(paste0("number of levels of covariate K", shiny::tags$sub(1))), 2, min = 2, max = 5, step = 1),
+        lapply(3:6, function(i){
+          shinyjs::hidden(shiny::numericInput(paste0("fact_",i), shiny::HTML(paste0("number of levels of covariate K", shiny::tags$sub(i - 1))), 2, min = 2, max = 5, step = 1))
+        }),
+        shiny::actionLink("add", NULL, icon = shiny::icon("plus-square")),
+        shiny::actionLink("hide", NULL, icon = shiny::icon("minus-square")),
+        shiny::hr(),
+        shiny::tabsetPanel(
+          shiny::tabPanel("example data",
+            shiny::br(),
+            shiny::selectInput("exampledata", label = NULL, choices = list("example data" = "",
+                                                                           "2 x 2" = "two_x_two",
+                                                                           "3 x 2 x 3" = "three_x_two_x_three",
+                                                                           "Maxwell, Delaney & Kelley (2017; p.361)" = "MaxDelKel2017_p361",
+                                                                           "Maxwell, Delaney & Kelley (2017; p.376)" = "MaxDelKel2017_p376")
+            ),
+            shiny::uiOutput("source")
+          ),
+          shiny::tabPanel("upload data",
+            shiny::br(),
+            shiny::fileInput("importset", NULL, width = "100%"),
+          )
+        )
+      )
+    } else {
+      shiny::uiOutput("modeUI")
     }
   })
   
-  output$levelstreat <- shiny::renderUI({
-    shiny::div(style = "width:49%; display:inline-block", shiny::numericInput("fact_1", paste0("number of treatment levels"), if(!(is.null(factors$b))){factors$b} else {2}, min = 2, max = 5, step = 1))
+  output$practicalTab <- shiny::renderUI({
+    if(mode()){
+      shiny::div(
+        "test"
+      )
+    } else {
+      shiny::uiOutput("modeUI")
+    }
   })
   
-  Faktorstufen <- shiny::reactive({
-    shiny::req(factors$a)
-    
-    sapply(2:(factors$a + 2), function(i){
-      factors[[letters[i]]]
-    })
+  Faktorstufen <- shiny::eventReactive({
+      nrofcov()
+      input$fact_1
+      input$fact_2
+      input$fact_3
+      input$fact_4
+      input$fact_5
+      input$fact_6
+    },{
+      sapply(1:(nrofcov() + 1), function(i){
+        input[[paste0("fact_",i)]]
+      })
+  })
+  
+  shiny::observeEvent({
+    Faktorstufen()
+  },{
+    shiny::req(!actions$freshupload)
+    actions$freshchangeoflevels <- TRUE
   })
   
   dimnames <- shiny::reactive({
     if(!is.null(Faktorstufen())){
-       list(paste0("x = ", 1:Faktorstufen()[1]), do.call(paste0, rlist::list.flatten(rlist::list.expand(sapply(1:length(Faktorstufen()[-1]), function(i){paste0("K<sub>",i,"</sub> = ", rep(1:Faktorstufen()[-1][i], each = prod(Faktorstufen()[-1][-c(1:i)])))}, simplify = FALSE), list(c("<br>"))))[1:(length(Faktorstufen()[-1]) * 2- 1)]))
+       list(paste0("X = ", 1:Faktorstufen()[1]), do.call(paste0, rlist::list.flatten(rlist::list.expand(sapply(1:length(Faktorstufen()[-1]), function(i){paste0("K<sub>",i,"</sub> = ", rep(1:Faktorstufen()[-1][i], each = prod(Faktorstufen()[-1][-c(1:i)])))}, simplify = FALSE), list(c("<br>"))))[1:(length(Faktorstufen()[-1]) * 2- 1)]))
     } else {
        list(NULL, NULL)
     }
   })
   
-  stored <- reactiveValues(means = 50, freqs = 10)
+  stored <- shiny::reactiveValues(means = 50, freqs = 10)
   
   output$matrixmeans <- rhandsontable::renderRHandsontable({
-    shiny::req(Faktorstufen(), stored)
+    shiny::req(Faktorstufen(), stored$means)
     rhandsontable::hot_table(rhandsontable::rhandsontable(structure(matrix(stored$means, nrow = Faktorstufen()[1], ncol = prod(Faktorstufen()[-1])), dimnames = dimnames())), contextMenu = FALSE, stretchH = "all")
   })
   
   output$matrixfreqs <- rhandsontable::renderRHandsontable({
-    shiny::req(Faktorstufen(), stored)
+    shiny::req(Faktorstufen(), stored$freqs)
     #the validator makes sure that input is non-zero, positive integer < 1000 // type and format reduce to integer and non comma number
     rhandsontable::hot_table(rhandsontable::hot_col(rhandsontable::rhandsontable(structure(matrix(stored$freqs, nrow = Faktorstufen()[1], ncol = prod(Faktorstufen()[-1])), dimnames = dimnames())), 1:prod(Faktorstufen()[-1]), validator = "function (value, callback) {if (value === null || value === void 0) {value = '';} if (this.allowEmpty && value === '') {return callback(true);} else if (value === '') {return callback(false);} let isNumber = /^[1-9]\\d{0,2}$/.test(value); if (!isNumber) {return callback(false);} if (isNaN(parseFloat(value))) {return callback(false);} return callback(true);}", allowInvalid = FALSE, type = "numeric", format = "0,0"), contextMenu = FALSE, stretchH = "all")
   })
   
+  #### . overview ####
+  output$countcells <- shiny::renderText(prod(Faktorstufen()))
+  output$sumfreq <- shiny::renderText(sum(data$work$freq))
+  output$design <- shiny::renderText(paste0(paste0(Faktorstufen(), collapse = " x "), " - Design"))
+  
   #### . data stuff ####
   data <- shiny::reactiveValues()
   
-  observeEvent({
+  shiny::observeEvent({
     input$matrixmeans
     input$matrixfreqs
   },{
-    shiny::req(Faktorstufen(), input$matrixmeans, input$matrixfreqs)
+    actions$freshchangemeansorfreqs <- TRUE
+    stored$means <- rhandsontable::hot_to_r(input$matrixmeans)
+    stored$freqs <- rhandsontable::hot_to_r(input$matrixfreqs)
+  })
+  
+  shiny::observeEvent({
+    actions$freshchangeoflevels
+    actions$freshchangemeansorfreqs
+  },{
+    shiny::req(actions$freshchangeoflevels |  actions$freshchangemeansorfreqs)
+    
+    #clear exampledata and fileupload
+    
+    actions$freshchangemeansorfreqs <- FALSE
+  })
+  
+  shiny::observeEvent({
+    actions$freshchangeoflevels
+  },{
+    shiny::req(actions$freshchangeoflevels)
+    
+    stored$means <- 50
+    stored$freqs <- 10
+    
+    actions$freshchangeoflevels <- FALSE
+  })
+  
+  shiny::observeEvent({
+    Faktorstufen()
+    stored$means
+    stored$freqs
+  },{
+    shiny::req(Faktorstufen(), stored$means, stored$freqs)
+    
+    if(actions$freshupload){ # if data is freshly uploaded, wait for Faktorstufen to update accordingly, then you can go on
+      shiny::req(Faktorstufen()[1] == nrow(stored$means), prod(Faktorstufen()[-1]) == ncol(stored$means))
+      actions$freshupload <- FALSE
+    }
     
     data$work <- list(
-      means = matrix(rhandsontable::hot_to_r(input$matrixmeans), nrow = Faktorstufen()[1], ncol = prod(Faktorstufen()[-1]), dimnames = dimnames()),
-      freq = matrix(rhandsontable::hot_to_r(input$matrixfreqs), nrow = Faktorstufen()[1], ncol = prod(Faktorstufen()[-1]), dimnames = dimnames())
+      means = matrix(stored$means, nrow = Faktorstufen()[1], ncol = prod(Faktorstufen()[-1]), dimnames = dimnames()),
+      freq = matrix(stored$freqs, nrow = Faktorstufen()[1], ncol = prod(Faktorstufen()[-1]), dimnames = dimnames())
     )
   })
   
   #### . results ####
-  observeEvent({
+  shiny::observeEvent({
     data$work  
   },{
     data$result <- unbANOVA::unbalancedANOVA(means = data$work$means, freq = data$work$freq, k.levels = Faktorstufen()[-1])
@@ -164,31 +275,97 @@ server = function(input, output, session){
     data$names <- do.call(paste0, rlist::list.flatten(rlist::list.expand(sapply(1:length(Faktorstufen()[-1]), function(i){paste0("K",i," = ", rep(1:Faktorstufen()[-1][i], each = prod(Faktorstufen()[-1][-c(1:i)])))}, simplify = FALSE), list(c(", "))))[1:(length(Faktorstufen()[-1]) * 2- 1)])
     
     output$Attributes <- shiny::renderUI(shiny::fluidRow(
-                              shiny::column(4, shiny::HTML(if(data$result$attr$isBalanced){paste0("Data is <font color=\"#009000\"><b>balanced</b></font> ", fontawesome::fa("balance-scale", fill = "#009000"))}else{paste0("Data is <font color=\"#A00000\"><b>not balanced</b></font> ", fontawesome::fa("balance-scale-left", fill = "#A00000"))})),
-                              shiny::column(4, shiny::HTML(if(data$result$attr$isProportional){paste0("Data is <font color=\"#009000\"><b>proportional</b></font> ", fontawesome::fa("percentage", fill = "#009000"))}else{paste0("Data is <font color=\"#A00000\"><b>not proportional</b></font> ", fontawesome::fa("percentage", fill = "#A00000"))})),
-                              shiny::column(4, shiny::HTML(if(data$result$attr$isInteractionfree){paste0("Data has <font color=\"#009000\"><b>no x-K-interaction</b></font> ", fontawesome::fa("star-of-life", fill = "#009000"))}else{paste0("Data has <font color=\"#A00000\"><b>x-K-interaction</b></font> ", fontawesome::fa("star-of-life", fill = "#A00000"))}))
-                            ))
-    
+                          shiny::column(4, shiny::HTML(if(data$result$attr$isBalanced){paste0("Data is <font color=\"#009000\"><b>balanced</b></font> ", fontawesome::fa("balance-scale", fill = "#009000"))}else{paste0("Data is <font color=\"#A00000\"><b>not balanced</b></font> ", fontawesome::fa("balance-scale-left", fill = "#A00000"))})),
+                          shiny::column(4, shiny::HTML(if(data$result$attr$isProportional){paste0("Data is <font color=\"#009000\"><b>proportional</b></font> ", fontawesome::fa("percentage", fill = "#009000"))}else{paste0("Data is <font color=\"#A00000\"><b>not proportional</b></font> ", fontawesome::fa("percentage", fill = "#A00000"))})),
+                          shiny::column(4, shiny::HTML(if(data$result$attr$isInteractionfree){paste0("Data has <font color=\"#009000\"><b>no x-K-interaction</b></font> ", fontawesome::fa("star-of-life", fill = "#009000"))}else{paste0("Data has <font color=\"#A00000\"><b>x-K-interaction</b></font> ", fontawesome::fa("star-of-life", fill = "#A00000"))}))
+                         ))
     output$MarginalMeans <- shiny::renderTable(summary(data$result)$`Marginal Means`, rownames = TRUE, width = "100%", bordered = TRUE)
-    
     output$Effects <- shiny::renderTable(effects(data$result), rownames = TRUE, width = "100%", bordered = TRUE)
-    
     output$SumOfSquares <- shiny::renderTable(summary(data$result)$`Sum of Squares`, width = "100%", bordered = TRUE)
+    
+    actions$freshstart <- FALSE
+  })
+  
+  output$printresult <- shiny::renderPrint({
+    print(data$result)
+    print(data$result$call)
+    data$result$attr
+  })
+  
+  validOutput <- shiny::reactiveVal({value = FALSE})
+  
+  shiny::observeEvent({
+      nrofcov()
+      input$fact_1
+      input$fact_2
+      input$fact_3
+      input$fact_4
+      input$fact_5
+      input$fact_6
+    },{
+      validOutput(FALSE)
+  })
+  
+  shiny::observeEvent({
+      data$result
+    },{
+      validOutput(TRUE)
+  })
+  
+  output$valid <- shiny::renderText(validOutput())
+  
+  #### . display results ####
+  showMeans <- shiny::reactive({if(is.null(input$showMeans)){TRUE}else{input$showMeans}})
+  showEffects <- shiny::reactive({if(is.null(input$showEffects)){FALSE}else{input$showEffects}})
+  showSS <- shiny::reactive({if(is.null(input$showSS)){TRUE}else{input$showSS}})
+  
+  output$marginalMeansDisplay <- shiny::renderUI({
+    shiny::req(data$result)
+    if(showMeans()){
+     shiny::div(
+       shiny::h3("Marginal Means"),
+       shiny::tableOutput("MarginalMeans")
+     )
+    }
+  })
+  
+  output$effectsDisplay <- shiny::renderUI({
+    shiny::req(data$result)
+    if(showEffects()){
+     shiny::div(
+       shiny::h3("Effects"),
+       shiny::tableOutput("Effects")
+     )
+    }
+  })
+  
+  output$SSDisplay <- shiny::renderUI({
+    shiny::req(data$result)
+    if(showSS()){
+     shiny::div(
+       shiny::h3("Sum of Squares"),
+       shiny::tableOutput("SumOfSquares") 
+     )
+    }
   })
   
   #### . import ####
   shiny::observeEvent({
     input$exampledata
   },{
-    if(input$exampledata != ""){
-      data$d <- get(input$exampledata)
-      
-      output$source <- shiny::renderUI({switch(input$exampledata,
+    shiny::req(input$exampledata)
+    
+    data$d <- get(input$exampledata)
+  })
+  
+  output$source <- shiny::renderUI({
+    shiny::req(input$exampledata)
+    
+    switch(input$exampledata,
       "MaxDelKel2017_p361" = shiny::div(id = "cite", shiny::strong("example data taken from:"), br(), "page 361 of Maxwell, S. E., Delaney, H. D., & Kelley, K. (2017).", shiny::tags$i("Designing experiments and analyzing data: A model comparison perspective"), "(3rd ed.). New York: Routledge."), 
       "MaxDelKel2017_p376" = shiny::div(id = "cite", shiny::strong("example data taken from:"), br(), "page 376 of Maxwell, S. E., Delaney, H. D., & Kelley, K. (2017).", shiny::tags$i("Designing experiments and analyzing data: A model comparison perspective"), "(3rd ed.). New York: Routledge."), 
       shiny::div()
-      )})
-    }
+    )
   })
   
   shiny::observeEvent({
@@ -200,15 +377,21 @@ server = function(input, output, session){
   shiny::observeEvent({
     data$d
   },{
-    req(data$d)
+    shiny::req(data$d)
     
-    shiny::updateNumericInput(session, inputId = "factors", value = length(data$d$k))
     shiny::updateNumericInput(session, inputId = "fact_1", value = nrow(data$d$means))
     
     lapply(1:length(data$d$k), function(i){
       shiny::updateNumericInput(session, inputId = paste0("fact_", i+1), value = data$d$k[i])
     })
     
+    sapply((length(data$d$k) - nrofcov()):0, function(i){
+      if(i == 0) return(NULL)
+      if(i > 0) shinyjs::click(id = "add")
+      if(i < 0) shinyjs::click(id = "hide")
+    })
+    
+    actions$freshupload <- TRUE
     stored$means <- data$d$means
     stored$freqs <- data$d$freq
   })
