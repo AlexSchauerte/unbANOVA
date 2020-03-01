@@ -26,5 +26,6 @@ Imports:
     ggplot2,
     shiny,
     shinythemes,
-    shinyjs
+    shinyjs,
+    tippy
 RoxygenNote: 7.0.2

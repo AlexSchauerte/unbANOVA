@@ -15,10 +15,23 @@ ui = shiny::fluidPage(
       }
       
       .bootstrap-switch .bootstrap-switch-handle-on.bootstrap-switch-primary {background-color: #e95420}
+      
+      table {
+        table-layout: fixed;
+      }
+      
+      .th {
+        width:20%;
+      }
+      
+      #SumOfSquares>table {
+        float: right;
+      }
     "))
   ),
   theme = shinythemes::shinytheme("united"),
   shinyjs::useShinyjs(),
+  bsplus::use_bs_tooltip(),
   #shinythemes::themeSelector(),
   shiny::titlePanel("unbANOVA"),
   shiny::sidebarLayout(
@@ -31,13 +44,14 @@ ui = shiny::fluidPage(
             shiny::uiOutput("practicalTab")
         ),
         shiny::tabPanel("Means & Frequencies",
+          shiny::br(),
           shiny::strong("means:"),
           rhandsontable::rHandsontableOutput("matrixmeans"),
           shiny::hr(),
           shiny::strong("freqs:"),
           rhandsontable::rHandsontableOutput("matrixfreqs")       
         ),
-        shiny::tabPanel("", icon = shiny::icon("cogs"),
+        shiny::tabPanel("", icon = shiny::icon("ellipsis-h"),
           shiny::br(),
           shiny::div(shinyWidgets::switchInput("showMeans", value = T, inline = T, size = "mini", offStatus = "dark"), "show marginal means"),
           shiny::div(shinyWidgets::switchInput("showEffects", inline = T, size = "mini", offStatus = "dark"), "show effects"),
@@ -48,13 +62,21 @@ ui = shiny::fluidPage(
     shiny::mainPanel(
       shiny::tabsetPanel(
         shiny::tabPanel("Overview",
-          shiny::strong("N = ", shiny::textOutput("sumfreq", inline = TRUE)), shiny::br(),
-          shiny::strong("number of cells: ", shiny::textOutput("countcells", inline = TRUE)), shiny::br(),
-          shiny::strong(shiny::textOutput("design"))
+          shiny::br(),
+          shiny::textOutput("design"),
+          shiny::div("number of cells: ", shiny::textOutput("countcells", inline = TRUE)),
+          shiny::div("N = ", shiny::textOutput("sumfreq", inline = TRUE)), shiny::br(),
+          shiny::uiOutput("overviewIsBalanced"),
+          shiny::uiOutput("overviewIsProportional"),
+          shiny::uiOutput("overviewIsInteractionfree"),
+          shiny::uiOutput("means"),
+          shiny::uiOutput("freqs"),
+          shiny::uiOutput("if_freqs")
+          
         ),
-        shiny::tabPanel("PrintResult",
-          shiny::verbatimTextOutput("printresult")              
-        ),
+        #shiny::tabPanel("PrintResult",
+        #  shiny::verbatimTextOutput("printresult")              
+        #),
         shiny::tabPanel("Results",
           shiny::uiOutput("marginalMeansDisplay"),
           shiny::uiOutput("effectsDisplay"),
@@ -118,16 +140,28 @@ server = function(input, output, session){
     shinyjs::hide(id = paste0("fact_", nrofcov() + 2))
   })
   
+  shiny::observe({
+    shiny::req(nrofcov())
+    if(nrofcov() < 5){shinyjs::show("add")} else {shinyjs::hide("add")}
+    if(nrofcov() > 1){shinyjs::show("hide")} else {shinyjs::hide("hide")}
+  })
+  
   output$theoreticalTab <- shiny::renderUI({
     if(!(mode())){
       shiny::div(
+        shiny::br(),
         shiny::numericInput("fact_1", paste0("number of levels of treatment X"), 2, min = 2, max = 5, step = 1),
+        shiny::hr(),
+        shiny::div(
+          tippy::with_tippy(shiny::actionLink(style = "float:right;", "add", NULL, icon = shiny::icon("plus-square")), tooltip = "add covariate", placement = "left", animation = "shift-away", arrow = TRUE),
+          shiny::HTML("&nbsp;&nbsp;&nbsp;"),
+          tippy::with_tippy(shinyjs::hidden(shiny::actionLink(style = "float:right;", "hide", NULL, icon = shiny::icon("minus-square"))), tooltip = "remove covariate", placement = "right", animation = "shift-away", arrow = TRUE)
+        ),
+        shiny::br(),
         shiny::numericInput("fact_2", shiny::HTML(paste0("number of levels of covariate K", shiny::tags$sub(1))), 2, min = 2, max = 5, step = 1),
         lapply(3:6, function(i){
           shinyjs::hidden(shiny::numericInput(paste0("fact_",i), shiny::HTML(paste0("number of levels of covariate K", shiny::tags$sub(i - 1))), 2, min = 2, max = 5, step = 1))
         }),
-        shiny::actionLink("add", NULL, icon = shiny::icon("plus-square")),
-        shiny::actionLink("hide", NULL, icon = shiny::icon("minus-square")),
         shiny::hr(),
         shiny::tabsetPanel(
           shiny::tabPanel("example data",
@@ -180,6 +214,7 @@ server = function(input, output, session){
   },{
     shiny::req(!actions$freshupload)
     actions$freshchangeoflevels <- TRUE
+    actions$needscalculation <- TRUE
   })
   
   dimnames <- shiny::reactive({
@@ -208,6 +243,60 @@ server = function(input, output, session){
   output$sumfreq <- shiny::renderText(sum(data$work$freq))
   output$design <- shiny::renderText(paste0(paste0(Faktorstufen(), collapse = " x "), " - Design"))
   
+  output$means_table <- shiny::renderTable({
+    shiny::req(!actions$freshupload,
+               nrow(data$work$freq) == length(dimnames()[[1]]), ncol(data$work$freq) == length(dimnames()[[2]]))
+    structure(data$work$means, dimnames = dimnames())
+  }, rownames = TRUE, bordered = TRUE, sanitize.text.function = function(x) x)
+  
+  output$freqs_table <- shiny::renderTable({
+    shiny::req(!actions$freshupload,
+               nrow(data$work$freq) == length(dimnames()[[1]]), ncol(data$work$freq) == length(dimnames()[[2]]))
+    structure(data$work$freq, dimnames = dimnames())
+  }, rownames = TRUE, bordered = TRUE, digits = 0, sanitize.text.function = function(x) x)
+  
+  output$if_freqs_table <- shiny::renderTable({
+    shiny::req(!actions$freshupload, !actions$needscalculation)
+    structure(data$result$attr$interactionfreeMeans, dimnames = dimnames())
+  }, rownames = TRUE, bordered = TRUE, sanitize.text.function = function(x) x)
+  
+  output$overviewIsBalanced <- shiny::renderUI({
+                                shiny::req(data$result)
+                                shiny::HTML(if(data$result$attr$isBalanced){paste0("Data is <font color=\"#009000\"><b>balanced</b></font>", fontawesome::fa("balance-scale", fill = "#009000"))}else{paste0("Data is <font color=\"#A00000\"><b>not balanced</b></font> ", fontawesome::fa("balance-scale-left", fill = "#A00000"))})
+                               })
+  output$overviewIsProportional <- shiny::renderUI({
+                                    shiny::req(data$result)
+                                    shiny::HTML(if(data$result$attr$isProportional){paste0("Data is <font color=\"#009000\"><b>proportional</b></font> ", fontawesome::fa("percentage", fill = "#009000"))}else{paste0("Data is <font color=\"#A00000\"><b>not proportional</b></font> ", fontawesome::fa("percentage", fill = "#A00000"))})
+                                   })
+  output$overviewIsInteractionfree <- shiny::renderUI({
+                                       shiny::req(data$result)
+                                       shiny::HTML(if(data$result$attr$isInteractionfree){paste0("Data has <font color=\"#009000\"><b>no x-K-interaction</b></font> ", fontawesome::fa("star-of-life", fill = "#009000"))}else{paste0("Data has <font color=\"#A00000\"><b>x-K-interaction</b></font> ", fontawesome::fa("star-of-life", fill = "#A00000"))})
+                                      })
+  
+  output$means <- shiny::renderUI({
+    shiny::req(data$work$means)
+    shiny::div(
+      shiny::h3("means"),
+      shiny::tableOutput("means_table")
+    )
+  })
+  
+  output$freqs <- shiny::renderUI({
+    shiny::req(data$work$freq)
+    shiny::div(
+      shiny::h3("frequencies"),
+      shiny::tableOutput("freqs_table")
+    )
+  })
+  
+  output$if_freqs <- shiny::renderUI({
+    shiny::req(data$result$attr$interactionfreeMeans)
+    shiny::div(
+      shiny::h3("x-K-interactionfree means (calculated)"),
+      shiny::tableOutput("if_freqs_table")
+    )
+  })
+
   #### . data stuff ####
   data <- shiny::reactiveValues()
   
@@ -258,6 +347,8 @@ server = function(input, output, session){
       means = matrix(stored$means, nrow = Faktorstufen()[1], ncol = prod(Faktorstufen()[-1]), dimnames = dimnames()),
       freq = matrix(stored$freqs, nrow = Faktorstufen()[1], ncol = prod(Faktorstufen()[-1]), dimnames = dimnames())
     )
+    
+    actions$needscalculation <- TRUE
   })
   
   #### . results ####
@@ -281,38 +372,17 @@ server = function(input, output, session){
                          ))
     output$MarginalMeans <- shiny::renderTable(summary(data$result)$`Marginal Means`, rownames = TRUE, width = "100%", bordered = TRUE)
     output$Effects <- shiny::renderTable(effects(data$result), rownames = TRUE, width = "100%", bordered = TRUE)
-    output$SumOfSquares <- shiny::renderTable(summary(data$result)$`Sum of Squares`, width = "100%", bordered = TRUE)
+    output$SumOfSquares <- shiny::renderTable(summary(data$result)$`Sum of Squares`, width = "80%", bordered = TRUE)
     
     actions$freshstart <- FALSE
+    actions$needscalculation <- FALSE
   })
   
-  output$printresult <- shiny::renderPrint({
+  output$printresult <- shiny::renderPrint({ # used for result checking
     print(data$result)
     print(data$result$call)
     data$result$attr
   })
-  
-  validOutput <- shiny::reactiveVal({value = FALSE})
-  
-  shiny::observeEvent({
-      nrofcov()
-      input$fact_1
-      input$fact_2
-      input$fact_3
-      input$fact_4
-      input$fact_5
-      input$fact_6
-    },{
-      validOutput(FALSE)
-  })
-  
-  shiny::observeEvent({
-      data$result
-    },{
-      validOutput(TRUE)
-  })
-  
-  output$valid <- shiny::renderText(validOutput())
   
   #### . display results ####
   showMeans <- shiny::reactive({if(is.null(input$showMeans)){TRUE}else{input$showMeans}})
@@ -344,7 +414,7 @@ server = function(input, output, session){
     if(showSS()){
      shiny::div(
        shiny::h3("Sum of Squares"),
-       shiny::tableOutput("SumOfSquares") 
+       shiny::tableOutput("SumOfSquares")
      )
     }
   })
@@ -400,7 +470,7 @@ server = function(input, output, session){
   
   #### . graph stuff ####
   output$graph_anova1 <- shiny::renderPlot({
-    req(data$graph)
+    shiny::req(data$graph, !actions$freshupload, !actions$needscalculation)
     
     ggplot2::ggplot(data = data$graph, mapping = ggplot2::aes(x=x)) +
       ggplot2::geom_line(mapping = ggplot2::aes(y=means, color = rep(data$names, Faktorstufen()[1]))) +
@@ -413,7 +483,7 @@ server = function(input, output, session){
   })
   
   output$graph_anova2 <- shiny::renderPlot({
-    req(data$graph)
+    shiny::req(data$graph, !actions$freshupload, !actions$needscalculation)
     
     ggplot2::ggplot(data = data$graph, mapping = ggplot2::aes(x=x)) +
       ggplot2::geom_line(mapping = ggplot2::aes(y=means, color = rep(data$names, Faktorstufen()[1])), alpha = .5) +
@@ -428,7 +498,7 @@ server = function(input, output, session){
   })
   
   output$graph_anova3 <- shiny::renderPlot({
-    req(data$graph)
+    shiny::req(data$graph, !actions$freshupload, !actions$needscalculation)
     
     ggplot2::ggplot(data = data$graph, mapping = ggplot2::aes(x=x)) +
       ggplot2::geom_line(mapping = ggplot2::aes(y=means, color = rep(data$names, Faktorstufen()[1]))) +
@@ -441,7 +511,7 @@ server = function(input, output, session){
   })
   
   output$graph_ate <- shiny::renderPlot({
-    req(data$graph)
+    shiny::req(data$graph, !actions$freshupload, !actions$needscalculation)
     
     ggplot2::ggplot(data = data$graph, mapping = ggplot2::aes(x=x)) +
       ggplot2::geom_line(mapping = ggplot2::aes(y=means, color = rep(data$names, Faktorstufen()[1]))) +
