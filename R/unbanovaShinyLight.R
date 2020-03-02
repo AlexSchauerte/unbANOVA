@@ -8,8 +8,8 @@ shiny::runApp(
 shiny::shinyApp(
 #### ui ####
 ui = shiny::fluidPage(
-  tags$head( #makes dropdown menu open on hover
-    tags$style(HTML("
+  shiny::tags$head( #makes dropdown menu open on hover
+    shiny::tags$style(shiny::HTML("
       .dropdown:hover>.dropdown-menu {
         display: block;
       }
