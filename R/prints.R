@@ -18,7 +18,7 @@ summary.unbANOVA <- function(g){
 
 #' @export
 effects.unbANOVA <- function(g, reference.group = NULL){
-  if(is.null(reference.group)){
+  if(is.null(reference.group) || reference.group == 0){
     return(cbind(`ANOVA I` = g$anova1$effects, `ANOVA II` = g$anova2$effects, `ANOVA III` = g$anova3$effects, `ATE` = g$ATE$effects))
   } else if(reference.group %in% 1:length(g$anova1$marginalMeans)) {
     return(cbind(`ANOVA I` = setNames(g$anova1$marginalMeans[-reference.group] - g$anova1$marginalMeans[reference.group], paste0((1:length(g$anova1$marginalMeans))[-reference.group], " - ", reference.group)),

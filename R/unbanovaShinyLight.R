@@ -4,6 +4,30 @@
 #' @keywords anova
 #' @export
 unbanovaLightShiny <- function(){
+#### modules ####
+widgets_UI <- function(id) {
+   ns = shiny::NS(id)
+
+   shiny::fluidRow(
+     shiny::column(4, shinyWidgets::switchInput(ns("showMeans_graph"), value = TRUE, inline = TRUE, size = "small", offStatus = "dark"), "show marginal means"),
+     shiny::column(4, shinyWidgets::switchInput(ns("showEffects_graph"), value = FALSE, inline = TRUE, size = "small", offStatus = "dark"), "show effects"),
+     shiny::column(4, shinyWidgets::switchInput(ns("showWeights_graph"), value = TRUE, inline = TRUE, size = "small", offStatus = "dark"), "show frequencies")
+   )
+}
+
+widgets <- function(input, output, session) {
+  temp <- shiny::reactiveValues()
+  
+  shiny::observe({
+    temp$showMeans_graph <- if(is.null(input$showMeans_graph)){TRUE}else{input$showMeans_graph}
+    temp$showEffects_graph <- if(is.null(input$showEffects_graph)){FALSE}else{input$showEffects_graph}
+    temp$showWeights_graph <- if(is.null(input$showWeights_graph)){TRUE}else{input$showWeights_graph}
+  })
+  
+  return(temp)
+}
+
+
 shiny::runApp(
 shiny::shinyApp(
 #### ui ####
@@ -35,6 +59,7 @@ ui = shiny::fluidPage(
   #shinythemes::themeSelector(),
   shiny::titlePanel("unbANOVA"),
   shiny::sidebarLayout(
+    #### . sidebar ####
     shiny::sidebarPanel(
       shiny::tabsetPanel(id = "inputs",
         shiny::tabPanel("Levels",
@@ -53,12 +78,14 @@ ui = shiny::fluidPage(
         ),
         shiny::tabPanel("", icon = shiny::icon("ellipsis-h"),
           shiny::br(),
-          shiny::div(shinyWidgets::switchInput("showMeans", value = T, inline = T, size = "mini", offStatus = "dark"), "show marginal means"),
-          shiny::div(shinyWidgets::switchInput("showEffects", inline = T, size = "mini", offStatus = "dark"), "show effects"),
-          shiny::div(shinyWidgets::switchInput("showSS", value = T, inline = T, size = "mini"), "show sum of squares")
+          shiny::div(shinyWidgets::switchInput("showMeans", value = TRUE, inline = TRUE, size = "mini", offStatus = "dark"), "show marginal means"),
+          shiny::div(shinyWidgets::switchInput("showEffects", inline = TRUE, size = "mini", offStatus = "dark"), "show effects"),
+          shiny::uiOutput("referenceGroup"),
+          shiny::div(shinyWidgets::switchInput("showSS", value = TRUE, inline = TRUE, size = "mini"), "show sum of squares")
         )
       )
     ),
+    #### . mainPanel ####
     shiny::mainPanel(
       shiny::tabsetPanel(
         shiny::tabPanel("Overview",
@@ -83,11 +110,12 @@ ui = shiny::fluidPage(
           shiny::uiOutput("SSDisplay"),
           shiny::uiOutput("Attributes")
         ),
+        #shinyWidgets::dropMenu
         shiny::navbarMenu("Graphs", icon = shiny::icon("chart-bar", "fa"),
-          shiny::tabPanel("ANOVA I", shinycssloaders::withSpinner(shiny::plotOutput("graph_anova1"))),
-          shiny::tabPanel("ANOVA II", shinycssloaders::withSpinner(shiny::plotOutput("graph_anova2"))),
-          shiny::tabPanel("ANOVA III", shinycssloaders::withSpinner(shiny::plotOutput("graph_anova3"))),
-          shiny::tabPanel("ATE", shinycssloaders::withSpinner(shiny::plotOutput("graph_ate")))
+          shiny::tabPanel("ANOVA I", shinycssloaders::withSpinner(shiny::plotOutput("graph_anova1")), widgets_UI("graphoptions_1")),
+          shiny::tabPanel("ANOVA II", shinycssloaders::withSpinner(shiny::plotOutput("graph_anova2")), widgets_UI("graphoptions_2")),
+          shiny::tabPanel("ANOVA III", shinycssloaders::withSpinner(shiny::plotOutput("graph_anova3")), widgets_UI("graphoptions_3")),
+          shiny::tabPanel("ATE", shinycssloaders::withSpinner(shiny::plotOutput("graph_ate")), widgets_UI("graphoptions_4"))
         )
       )
     )
@@ -238,6 +266,17 @@ server = function(input, output, session){
     rhandsontable::hot_table(rhandsontable::hot_col(rhandsontable::rhandsontable(structure(matrix(stored$freqs, nrow = Faktorstufen()[1], ncol = prod(Faktorstufen()[-1])), dimnames = dimnames())), 1:prod(Faktorstufen()[-1]), validator = "function (value, callback) {if (value === null || value === void 0) {value = '';} if (this.allowEmpty && value === '') {return callback(true);} else if (value === '') {return callback(false);} let isNumber = /^[1-9]\\d{0,2}$/.test(value); if (!isNumber) {return callback(false);} if (isNaN(parseFloat(value))) {return callback(false);} return callback(true);}", allowInvalid = FALSE, type = "numeric", format = "0,0"), contextMenu = FALSE, stretchH = "all")
   })
   
+  output$referenceGroup <- shiny::renderUI({
+    shiny::req(showEffects())
+    shiny::selectInput("referenceGroup", "Reference Group", choices = c("None" = 0, 1:Faktorstufen()[1]), selected = if(!(is.null(input$referenceGroup)) && (input$referenceGroup %in% 0:Faktorstufen()[1])){input$referenceGroup} else {NULL})
+  })
+  
+  referenceGroup <- shiny::reactive({
+    shiny::req(input$referenceGroup)
+    if(input$referenceGroup > Faktorstufen()[1]) return(NULL)
+    as.numeric(input$referenceGroup)
+  })
+  
   #### . overview ####
   output$countcells <- shiny::renderText(prod(Faktorstufen()))
   output$sumfreq <- shiny::renderText(sum(data$work$freq))
@@ -357,21 +396,13 @@ server = function(input, output, session){
   },{
     data$result <- unbANOVA::unbalancedANOVA(means = data$work$means, freq = data$work$freq, k.levels = Faktorstufen()[-1])
     
-    data$graph <- cbind(
-                    setNames(rev(expand.grid(sapply(rev(c(Faktorstufen()[1], Faktorstufen()[-1])), seq, simplify = F))), c("x", paste0("K", 1:length(Faktorstufen()[-1])))),
-                    list(freq = as.numeric(t(data$work$freq))), means = as.numeric(t(data$work$means)), ifmeans = as.numeric(t(data$result$attr$interactionfreeMeans)), anova1 = rep(data$result$anova1$marginalMeans, each = prod(Faktorstufen()[-1])),
-                         anova2 = rep(data$result$anova2$marginalMeans, each = prod(Faktorstufen()[-1])), anova3 = rep(data$result$anova3$marginalMeans, each = prod(Faktorstufen()[-1])), ate = rep(data$result$ATE$marginalMeans, each = prod(Faktorstufen()[-1]))
-                  )
-    
-    data$names <- do.call(paste0, rlist::list.flatten(rlist::list.expand(sapply(1:length(Faktorstufen()[-1]), function(i){paste0("K",i," = ", rep(1:Faktorstufen()[-1][i], each = prod(Faktorstufen()[-1][-c(1:i)])))}, simplify = FALSE), list(c(", "))))[1:(length(Faktorstufen()[-1]) * 2- 1)])
-    
     output$Attributes <- shiny::renderUI(shiny::fluidRow(
                           shiny::column(4, shiny::HTML(if(data$result$attr$isBalanced){paste0("Data is <font color=\"#009000\"><b>balanced</b></font> ", fontawesome::fa("balance-scale", fill = "#009000"))}else{paste0("Data is <font color=\"#A00000\"><b>not balanced</b></font> ", fontawesome::fa("balance-scale-left", fill = "#A00000"))})),
                           shiny::column(4, shiny::HTML(if(data$result$attr$isProportional){paste0("Data is <font color=\"#009000\"><b>proportional</b></font> ", fontawesome::fa("percentage", fill = "#009000"))}else{paste0("Data is <font color=\"#A00000\"><b>not proportional</b></font> ", fontawesome::fa("percentage", fill = "#A00000"))})),
                           shiny::column(4, shiny::HTML(if(data$result$attr$isInteractionfree){paste0("Data has <font color=\"#009000\"><b>no x-K-interaction</b></font> ", fontawesome::fa("star-of-life", fill = "#009000"))}else{paste0("Data has <font color=\"#A00000\"><b>x-K-interaction</b></font> ", fontawesome::fa("star-of-life", fill = "#A00000"))}))
                          ))
     output$MarginalMeans <- shiny::renderTable(summary(data$result)$`Marginal Means`, rownames = TRUE, width = "100%", bordered = TRUE)
-    output$Effects <- shiny::renderTable(effects(data$result), rownames = TRUE, width = "100%", bordered = TRUE)
+    output$Effects <- shiny::renderTable(effects(data$result, reference.group = referenceGroup()), rownames = TRUE, width = "100%", bordered = TRUE)
     output$SumOfSquares <- shiny::renderTable(summary(data$result)$`Sum of Squares`, width = "80%", bordered = TRUE)
     
     actions$freshstart <- FALSE
@@ -466,62 +497,34 @@ server = function(input, output, session){
     stored$freqs <- data$d$freq
   })
   
-  
-  
   #### . graph stuff ####
+  graphoptions1 <- shiny::callModule(widgets, "graphoptions_1")
+  graphoptions2 <- shiny::callModule(widgets, "graphoptions_2")
+  graphoptions3 <- shiny::callModule(widgets, "graphoptions_3")
+  graphoptions4 <- shiny::callModule(widgets, "graphoptions_4")
+  
   output$graph_anova1 <- shiny::renderPlot({
-    shiny::req(data$graph, !actions$freshupload, !actions$needscalculation)
+    shiny::req(data$result, !actions$freshupload, !actions$needscalculation)
     
-    ggplot2::ggplot(data = data$graph, mapping = ggplot2::aes(x=x)) +
-      ggplot2::geom_line(mapping = ggplot2::aes(y=means, color = rep(data$names, Faktorstufen()[1]))) +
-      ggplot2::geom_point(mapping = ggplot2::aes(y=means, color = rep(data$names, Faktorstufen()[1])), size = 30*(data$graph$freq/sum(data$graph$freq)) + 5) +
-      ggplot2::geom_point(mapping = ggplot2::aes(y=anova1, color = "Anova I", shape = 15), size = 4) +
-      ggplot2::scale_shape_identity() +
-      ggplot2::geom_text(mapping = ggplot2::aes(y=anova1, color = "Anova I"), label = rep(round(data$result$anova1$marginalMeans, 2), each = prod(Faktorstufen()[-1])), nudge_y = -(max(data$graph$means) - min(data$graph$means))/30, size = 4) +
-      ggplot2::scale_x_discrete(name = "", limits = 1:Faktorstufen()[1], labels = paste0("x = ", 1:Faktorstufen()[1])) +
-      ggplot2::labs(color = ggplot2::element_blank())
+    unbANOVA::plotunbANOVA(results = data$result, type = "I", showWeights = graphoptions1$showWeights_graph, showMM = graphoptions1$showMeans_graph, showEffects = graphoptions1$showEffects_graph)
   })
   
   output$graph_anova2 <- shiny::renderPlot({
-    shiny::req(data$graph, !actions$freshupload, !actions$needscalculation)
+    shiny::req(data$result, !actions$freshupload, !actions$needscalculation)
     
-    ggplot2::ggplot(data = data$graph, mapping = ggplot2::aes(x=x)) +
-      ggplot2::geom_line(mapping = ggplot2::aes(y=means, color = rep(data$names, Faktorstufen()[1])), alpha = .5) +
-      ggplot2::geom_point(mapping = ggplot2::aes(y=means, color = rep(data$names, Faktorstufen()[1])), alpha = .5, size = 30*(data$graph$freq/sum(data$graph$freq)) + 5) +
-      ggplot2::geom_point(mapping = ggplot2::aes(y=anova2, color = "Anova II", shape = 15), size = 4) +
-      ggplot2::geom_line(mapping = ggplot2::aes(y=ifmeans, color = rep(data$names, Faktorstufen()[1]))) +
-      ggplot2::geom_point(mapping = ggplot2::aes(y=ifmeans, color = rep(data$names, Faktorstufen()[1])), size = 2) +
-      ggplot2::scale_shape_identity() +
-      ggplot2::geom_text(mapping = ggplot2::aes(y=anova2, color = "Anova II"), label = rep(round(data$result$anova2$marginalMeans, 2), each = prod(Faktorstufen()[-1])), nudge_y = -(max(data$graph$means) - min(data$graph$means))/30, size = 4) +
-      ggplot2::scale_x_discrete(name = "", limits = 1:Faktorstufen()[1], labels = paste0("x = ", 1:Faktorstufen()[1])) +
-      ggplot2::labs(color = ggplot2::element_blank())
+    unbANOVA::plotunbANOVA(results = data$result, type = "II", showWeights = graphoptions2$showWeights_graph, showMM = graphoptions2$showMeans_graph, showEffects = graphoptions2$showEffects_graph)
   })
   
   output$graph_anova3 <- shiny::renderPlot({
-    shiny::req(data$graph, !actions$freshupload, !actions$needscalculation)
+    shiny::req(data$result, !actions$freshupload, !actions$needscalculation)
     
-    ggplot2::ggplot(data = data$graph, mapping = ggplot2::aes(x=x)) +
-      ggplot2::geom_line(mapping = ggplot2::aes(y=means, color = rep(data$names, Faktorstufen()[1]))) +
-      ggplot2::geom_point(mapping = ggplot2::aes(y=means, color = rep(data$names, Faktorstufen()[1])), size = 30*(data$graph$freq/sum(data$graph$freq)) + 5) +
-      ggplot2::geom_point(mapping = ggplot2::aes(y=anova3, color = "Anova III", shape = 15), size = 4) +
-      ggplot2::scale_shape_identity() +
-      ggplot2::geom_text(mapping = ggplot2::aes(y=anova3, color = "Anova III"), label = rep(round(data$result$anova3$marginalMeans, 2), each = prod(Faktorstufen()[-1])), nudge_y = -(max(data$graph$means) - min(data$graph$means))/30, size = 4) +
-      ggplot2::scale_x_discrete(name = "", limits = 1:Faktorstufen()[1], labels = paste0("x = ", 1:Faktorstufen()[1])) +
-      ggplot2::labs(color = ggplot2::element_blank())
+    unbANOVA::plotunbANOVA(results = data$result, type = "III", showWeights = graphoptions3$showWeights_graph, showMM = graphoptions4$showMeans_graph, showEffects = graphoptions3$showEffects_graph)
   })
   
   output$graph_ate <- shiny::renderPlot({
-    shiny::req(data$graph, !actions$freshupload, !actions$needscalculation)
+    shiny::req(data$result, !actions$freshupload, !actions$needscalculation)
     
-    ggplot2::ggplot(data = data$graph, mapping = ggplot2::aes(x=x)) +
-      ggplot2::geom_line(mapping = ggplot2::aes(y=means, color = rep(data$names, Faktorstufen()[1]))) +
-      ggplot2::geom_point(mapping = ggplot2::aes(y=means, color = rep(data$names, Faktorstufen()[1])), alpha = 0.5, size = 30*(rep(colSums(data$work$freq), times = Faktorstufen()[1])/sum(data$graph$freq)) + 5) +
-      ggplot2::geom_point(mapping = ggplot2::aes(y=means, color = rep(data$names, Faktorstufen()[1])), size = 30*(data$graph$freq/sum(data$graph$freq)) + 5) +
-      ggplot2::geom_point(mapping = ggplot2::aes(y=ate, color = "Anova III", shape = 15), size = 4) +
-      ggplot2::scale_shape_identity() +
-      ggplot2::geom_text(mapping = ggplot2::aes(y=ate, color = "Anova III"), label = rep(round(data$result$ATE$marginalMeans, 2), each = prod(Faktorstufen()[-1])), nudge_y = -(max(data$graph$means) - min(data$graph$means))/30, size = 4) +
-      ggplot2::scale_x_discrete(name = "", limits = 1:Faktorstufen()[1], labels = paste0("x = ", 1:Faktorstufen()[1])) +
-      ggplot2::labs(color = ggplot2::element_blank())
+    unbANOVA::plotunbANOVA(results = data$result, type = "ATE", showWeights = graphoptions3$showWeights_graph, showMM = graphoptions4$showMeans_graph, showEffects = graphoptions4$showEffects_graph)
   })
 }
 
