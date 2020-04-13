@@ -26,7 +26,7 @@ effects.unbANOVA <- function(g, reference.group = NULL){
                  `ANOVA III` = setNames(g$anova3$marginalMeans[-reference.group] - g$anova3$marginalMeans[reference.group], paste0((1:length(g$anova3$marginalMeans))[-reference.group], " - ", reference.group)),
                  `ATE`     = setNames(g$ATE$marginalMeans[-reference.group] - g$ATE$marginalMeans[reference.group], paste0((1:length(g$ATE$marginalMeans))[-reference.group], " - ", reference.group))))
   } else {
-    stop("'reference.group' not valid level of x.")
+    stop("'reference.group' not valid level of X.")
   }
 }
 

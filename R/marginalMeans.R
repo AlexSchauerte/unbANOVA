@@ -42,9 +42,9 @@ marginalMeans <- function(means, freq, k.levels = NULL, type = c("I", "II", "III
   }
 
   return(purrr::compact(list(
-    anova1 = if(1 %in% type | "I" %in% type) setNames(if(length(k.levels) == 1 & k.levels[1] == 1){as.numeric(means)}else{colSums(sapply(1:nrow(means), function(x){means[x,]*(freq[x,]/sum(freq[x,]))}))}, paste0("x = ", 1:nrow(means))),
-    anova2 = if(2 %in% type | "II" %in% type) setNames(if(length(k.levels) == 1 & k.levels[1] == 1){as.numeric(means)}else{rowMeans(means_if)}, paste0("x = ", 1:nrow(means))),
-    anova3 = if(3 %in% type | "III" %in% type) setNames(if(length(k.levels) == 1 & k.levels[1] == 1){as.numeric(means)}else{rowMeans(means)}, paste0("x = ", 1:nrow(means))),
-    ATE    = if("ATE" %in% type) setNames(if(length(k.levels) == 1 & k.levels[1] == 1){as.numeric(means)}else{colSums(sapply(1:nrow(means), function(x){means[x,] * (colSums(freq)/sum(freq))}))}, paste0("x = ", 1:nrow(means)))
+    anova1 = if(1 %in% type | "I" %in% type) setNames(if(length(k.levels) == 1 & k.levels[1] == 1){as.numeric(means)}else{colSums(sapply(1:nrow(means), function(x){means[x,]*(freq[x,]/sum(freq[x,]))}))}, paste0("X = ", 1:nrow(means))),
+    anova2 = if(2 %in% type | "II" %in% type) setNames(if(length(k.levels) == 1 & k.levels[1] == 1){as.numeric(means)}else{rowMeans(means_if)}, paste0("X = ", 1:nrow(means))),
+    anova3 = if(3 %in% type | "III" %in% type) setNames(if(length(k.levels) == 1 & k.levels[1] == 1){as.numeric(means)}else{rowMeans(means)}, paste0("X = ", 1:nrow(means))),
+    ATE    = if("ATE" %in% type) setNames(if(length(k.levels) == 1 & k.levels[1] == 1){as.numeric(means)}else{colSums(sapply(1:nrow(means), function(x){means[x,] * (colSums(freq)/sum(freq))}))}, paste0("X = ", 1:nrow(means)))
   )))
 }

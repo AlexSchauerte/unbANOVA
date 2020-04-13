@@ -7,7 +7,6 @@
 plotunbANOVA(
   results,
   type,
-  XorK = "K",
   showWeights = TRUE,
   showMM = TRUE,
   showEffects = FALSE,
@@ -18,8 +17,6 @@ plotunbANOVA(
 \item{results}{object of type 'unbANOVA', result of \link{unbalancedANOVA}}
 
 \item{type}{numeric or character denoting result of which ANOVA type to be ploted (allowed values are any of the following: "I", 1, "II", 2, "III", 3, "ATE")}
-
-\item{XorK}{"X" or "K", denoting which variable should be on the x-axis of the plot}
 
 \item{showWeights}{boolean, should Weights be added to means?}
 
