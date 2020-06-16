@@ -20,7 +20,6 @@ Imports:
     shinycssloaders,
     shinyWidgets,
     rhandsontable,
-    fontawesome,
     rlist,
     matrixcalc,
     purrr,
@@ -28,4 +27,6 @@ Imports:
     shiny,
     shinythemes,
     shinyjs,
-    tippy
+    tippy (>= 0.1.0)
+Remotes:  
+    JohnCoene/tippy
