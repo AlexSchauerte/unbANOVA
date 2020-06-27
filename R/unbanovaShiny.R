@@ -277,15 +277,15 @@ server = function(input, output, session){
 
   output$overviewIsBalanced <- shiny::renderUI({
                                 shiny::req(data$result)
-                                shiny::HTML(if(data$result$attr$isBalanced){paste0("Data is <font color=\"#009000\"><b>balanced</b><i class='fas fa-balance-scale'></i></font>")}else{paste0("Data is <font color=\"#A00000\"><b>not balanced</b> <i class='fas fa-balance-scale-left'></i></font>")})
+                                shiny::HTML(if(data$result$attr$isBalanced){"Data is <font color=\"#009000\"><b>balanced</b> <i class='fas fa-balance-scale'></i></font>"}else{"Data is <font color=\"#A00000\"><b>not balanced</b> <i class='fas fa-balance-scale-left'></i></font>"})
                                })
   output$overviewIsProportional <- shiny::renderUI({
                                     shiny::req(data$result)
-                                    shiny::HTML(if(data$result$attr$isProportional){paste0("Data is <font color=\"#009000\"><b>proportional</b> <i class='fas fa-percentage'></i></font>")}else{paste0("Data is <font color=\"#A00000\"><b>not proportional</b> <i class='fas fa-percentage'></i></font>")})
+                                    shiny::HTML(if(data$result$attr$isProportional){"Data is <font color=\"#009000\"><b>proportional</b> <i class='fas fa-percentage'></i></font>"}else{"Data is <font color=\"#A00000\"><b>not proportional</b> <i class='fas fa-percentage'></i></font>"})
                                    })
   output$overviewIsInteractionfree <- shiny::renderUI({
                                        shiny::req(data$result)
-                                       shiny::HTML(if(data$result$attr$isInteractionfree){paste0("Data has <font color=\"#009000\"><b>no x-K-interaction</b> <i class='fas fa-star-of-life'></i></font> ")}else{paste0("Data has <font color=\"#A00000\"><b>x-K-interaction</b> <i class='fas fa-star-of-life'></i></font>")})
+                                       shiny::HTML(if(data$result$attr$isInteractionfree){"Data has <font color=\"#009000\"><b>no x-K-interaction</b> <i class='fas fa-star-of-life'></i></font>"}else{"Data has <font color=\"#A00000\"><b>x-K-interaction</b> <i class='fas fa-star-of-life'></i></font>"})
                                       })
 
   output$means <- shiny::renderUI({
@@ -384,9 +384,9 @@ server = function(input, output, session){
     data$result <- unbANOVA::unbalancedANOVA(means = data$work$means, freq = data$work$freq, k.levels = Faktorstufen()[-1])
 
     output$Attributes <- shiny::renderUI(shiny::fluidRow(
-                          shiny::column(4, shiny::HTML(if(data$result$attr$isBalanced){paste0("Data is <font color=\"#009000\"><b>balanced</b> <i class='fas fa-balance-scale'></i></font>")}else{paste0("Data is <font color=\"#A00000\"><b>not balanced</b> <i class='fas fa-balance-scale-left'></i></font>")})),
-                          shiny::column(4, shiny::HTML(if(data$result$attr$isProportional){paste0("Data is <font color=\"#009000\"><b>proportional</b> <i class='fas fa-percentage'></i></font>")}else{paste0("Data is <font color=\"#A00000\"><b>not proportional</b> <i class='fas fa-percentage'></i></font>")})),
-                          shiny::column(4, shiny::HTML(if(data$result$attr$isInteractionfree){paste0("Data has <font color=\"#009000\"><b>no x-K-interaction</b> <i class='fas fa-star-of-life'></i></font>")}else{paste0("Data has <font color=\"#A00000\"><b>x-K-interaction</b> <i class='fas fa-star-of-life'></i></font>")}))
+                          shiny::column(4, shiny::HTML(if(data$result$attr$isBalanced){"Data is <font color=\"#009000\"><b>balanced</b> <i class='fas fa-balance-scale'></i></font>"}else{"Data is <font color=\"#A00000\"><b>not balanced</b> <i class='fas fa-balance-scale-left'></i></font>"})),
+                          shiny::column(4, shiny::HTML(if(data$result$attr$isProportional){"Data is <font color=\"#009000\"><b>proportional</b> <i class='fas fa-percentage'></i></font>"}else{"Data is <font color=\"#A00000\"><b>not proportional</b> <i class='fas fa-percentage'></i></font>"})),
+                          shiny::column(4, shiny::HTML(if(data$result$attr$isInteractionfree){"Data has <font color=\"#009000\"><b>no x-K-interaction</b> <i class='fas fa-star-of-life'></i></font>"}else{"Data has <font color=\"#A00000\"><b>x-K-interaction</b> <i class='fas fa-star-of-life'></i></font>"}))
                          ))
     output$MarginalMeans <- shiny::renderTable(summary(data$result)$`Marginal Means`, rownames = TRUE, width = "100%", bordered = FALSE, striped = TRUE, align = "r")
     output$Effects <- shiny::renderTable(effects(data$result, reference.group = referenceGroup()), rownames = TRUE, width = "100%", bordered = FALSE, striped = TRUE, align = "r")

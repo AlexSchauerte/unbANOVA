@@ -12,21 +12,23 @@ Description: This package provides tools to compare the
     in unbalanced designs.
 License: `use_mit_license()`, `use_gpl3_license()` or friends to
     pick a license
+Depends: 
+    R (>= 3.6.0)
 Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.1.0
 Imports: 
-    shinycssloaders,
-    shinyWidgets,
-    rhandsontable,
-    rlist,
-    matrixcalc,
-    purrr,
-    ggplot2,
-    shiny,
-    shinythemes,
-    shinyjs,
+    rhandsontable (>= 0.3.7),
+    rlist (>= 0.4.6.1),
+    matrixcalc (>= 1.0-3),
+    purrr (>= 0.3.4),
+    ggplot2 (>= 3.3.2),
+    shiny (>= 1.5),
+    shinythemes (>= 1.1.2),
+    shinyjs (>= 1.1),
+    shinycssloaders (>= 0.3),
+    shinyWidgets (>= 0.5.3),
     tippy (>= 0.1.0)
 Remotes:  
     JohnCoene/tippy
