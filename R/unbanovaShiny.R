@@ -77,7 +77,7 @@ ui = shiny::fluidPage(
   ),
   theme = shinythemes::shinytheme("united"),
   shinyjs::useShinyjs(),
-  bsplus::use_bs_tooltip(),
+  #bsplus::use_bs_tooltip(),
   #shinythemes::themeSelector(),
   shiny::titlePanel("unbANOVA"),
   shiny::sidebarLayout(
@@ -92,10 +92,10 @@ ui = shiny::fluidPage(
           lapply(3:6, function(i){
             shinyjs::hidden(shiny::numericInput(paste0("fact_",i), shiny::HTML(paste0("number of levels of covariate K", shiny::tags$sub(i - 1))), 2, min = 2, max = 5, step = 1))
           }),
-          shiny::div(
-            tippy::with_tippy(shiny::actionLink(style = "float:right;", "add", NULL, icon = shiny::icon("plus-square")), tooltip = "add covariate", placement = "left", animation = "shift-away", arrow = TRUE),
+          shiny::div(style = "float:right;",
+            tippy::tippy(shinyjs::hidden(shiny::actionLink("hide", NULL, icon = shiny::icon("minus-square"))), content = "remove covariate", placement = "left", animation = "shift-away", arrow = TRUE),
             shiny::HTML("&nbsp;&nbsp;&nbsp;"),
-            tippy::with_tippy(shinyjs::hidden(shiny::actionLink(style = "float:right;", "hide", NULL, icon = shiny::icon("minus-square"))), tooltip = "remove covariate", placement = "right", animation = "shift-away", arrow = TRUE)
+            tippy::tippy(shiny::actionLink("add", NULL, icon = shiny::icon("plus-square")), content = "add covariate", placement = "right", animation = "shift-away", arrow = TRUE)
           ),
           shiny::hr(),
           shiny::tabsetPanel(
@@ -124,6 +124,10 @@ ui = shiny::fluidPage(
           rhandsontable::rHandsontableOutput("matrixfreqs"),
           shiny::hr(),
           shiny::downloadButton("downloadable_data")
+        ),
+        shiny::tabPanel("Real Data",
+          shiny::br(),
+          shiny::fileInput("importrealdata", NULL, width = "100%")
         ),
         shiny::tabPanel("", icon = shiny::icon("ellipsis-h"),
           shiny::br(),
@@ -395,7 +399,7 @@ server = function(input, output, session){
                          ))
     output$MarginalMeans <- shiny::renderTable(summary(data$result)$`Marginal Means`, rownames = TRUE, width = "100%", bordered = FALSE, striped = TRUE, align = "r", digits = 3)
     output$Effects <- shiny::renderTable(effects(data$result, reference.group = referenceGroup()), rownames = TRUE, width = "100%", bordered = FALSE, striped = TRUE, align = "r", digits = 3)
-    output$SumOfSquares <- shiny::renderTable(summary(data$result)$`Sum of Squares`, width = "80%", bordered = FALSE, align = "r", digits = 3)
+    output$SumOfSquares <- shiny::renderTable(summary(data$result)$`Sum of Squares`, width = if(includeATE()) "80%" else "75%", bordered = FALSE, align = "r", digits = 3)
 
     actions$freshstart <- FALSE
     actions$needscalculation <- FALSE
