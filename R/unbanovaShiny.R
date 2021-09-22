@@ -130,7 +130,9 @@ ui = shiny::fluidPage(
           shiny::div(shinyWidgets::switchInput("showMeans", value = TRUE, inline = TRUE, size = "mini", offStatus = "dark"), " show marginal means"),
           shiny::div(shinyWidgets::switchInput("showEffects", inline = TRUE, size = "mini", offStatus = "dark"), " show effects"),
           shiny::uiOutput("referenceGroup"),
-          shiny::div(shinyWidgets::switchInput("showSS", value = TRUE, inline = TRUE, size = "mini"), " show sum of squares")
+          shiny::div(shinyWidgets::switchInput("showSS", value = TRUE, inline = TRUE, size = "mini"), " show sum of squares"),
+          shiny::hr(),
+          shiny::div(shinyWidgets::switchInput("includeATE", value = FALSE, inline = TRUE, size = "mini", offStatus = "dark"), " include ATE")
         )
       )
     ),
@@ -233,13 +235,13 @@ server = function(input, output, session){
 
   output$matrixmeans <- rhandsontable::renderRHandsontable({
     shiny::req(Faktorstufen(), stored$means)
-    rhandsontable::hot_table(rhandsontable::rhandsontable(structure(matrix(stored$means, nrow = Faktorstufen()[1], ncol = prod(Faktorstufen()[-1])), dimnames = dimnames())), contextMenu = FALSE, stretchH = "all")
+    rhandsontable::hot_table(rhandsontable::hot_col(rhandsontable::rhandsontable(structure(matrix(stored$means, nrow = Faktorstufen()[1], ncol = prod(Faktorstufen()[-1])), dimnames = dimnames())), 1:prod(Faktorstufen()[-1]), format = "0.000"), contextMenu = FALSE, stretchH = "all")
   })
 
   output$matrixfreqs <- rhandsontable::renderRHandsontable({
     shiny::req(Faktorstufen(), stored$freqs)
     #the validator makes sure that input is non-zero, positive integer < 1000 // type and format reduce to integer and non comma number
-    rhandsontable::hot_table(rhandsontable::hot_col(rhandsontable::rhandsontable(structure(matrix(stored$freqs, nrow = Faktorstufen()[1], ncol = prod(Faktorstufen()[-1])), dimnames = dimnames())), 1:prod(Faktorstufen()[-1]), validator = "function (value, callback) {if (value === null || value === void 0) {value = '';} if (this.allowEmpty && value === '') {return callback(true);} else if (value === '') {return callback(false);} let isNumber = /^[1-9]\\d{0,2}$/.test(value); if (!isNumber) {return callback(false);} if (isNaN(parseFloat(value))) {return callback(false);} return callback(true);}", allowInvalid = FALSE, type = "numeric", format = "0,0"), contextMenu = FALSE, stretchH = "all")
+    rhandsontable::hot_table(rhandsontable::hot_col(rhandsontable::rhandsontable(structure(matrix(stored$freqs, nrow = Faktorstufen()[1], ncol = prod(Faktorstufen()[-1])), dimnames = dimnames())), 1:prod(Faktorstufen()[-1]), validator = "function (value, callback) {if (value === null || value === void 0) {value = '';} if (this.allowEmpty && value === '') {return callback(true);} else if (value === '') {return callback(false);} let isNumber = /^[1-9]\\d{0,6}$/.test(value); if (!isNumber) {return callback(false);} if (isNaN(parseFloat(value))) {return callback(false);} return callback(true);}", allowInvalid = FALSE, type = "numeric", format = "0,0"), contextMenu = FALSE, stretchH = "all")
   })
 
   output$referenceGroup <- shiny::renderUI({
@@ -262,7 +264,7 @@ server = function(input, output, session){
     shiny::req(!actions$freshupload,
                nrow(data$work$freq) == length(dimnames()[[1]]), ncol(data$work$freq) == length(dimnames()[[2]]))
     structure(data$work$means, dimnames = dimnames())
-  }, rownames = TRUE, bordered = TRUE, sanitize.text.function = function(x) x)
+  }, rownames = TRUE, bordered = TRUE, digits = 3, sanitize.text.function = function(x) x)
 
   output$freqs_table <- shiny::renderTable({
     shiny::req(!actions$freshupload,
@@ -273,7 +275,7 @@ server = function(input, output, session){
   output$if_means_table <- shiny::renderTable({
     shiny::req(!actions$freshupload, !actions$needscalculation)
     structure(data$result$attr$interactionfreeMeans, dimnames = dimnames())
-  }, rownames = TRUE, bordered = TRUE, sanitize.text.function = function(x) x)
+  }, rownames = TRUE, bordered = TRUE, digits = 3, sanitize.text.function = function(x) x)
 
   output$overviewIsBalanced <- shiny::renderUI({
                                 shiny::req(data$result)
@@ -340,7 +342,7 @@ server = function(input, output, session){
   },{
     shiny::req(actions$freshchangeoflevels)
 
-    stored$means <- 50
+    stored$means <- 50.001
     stored$freqs <- 10
 
     actions$freshchangeoflevels <- FALSE
@@ -378,19 +380,22 @@ server = function(input, output, session){
   )
 
   #### . results ####
+  includeATE <- shiny::reactive({if(is.null(input$includeATE)){FALSE}else{input$includeATE}})
+  
   shiny::observeEvent({
+    includeATE()
     data$work
   },{
-    data$result <- unbANOVA::unbalancedANOVA(means = data$work$means, freq = data$work$freq, k.levels = Faktorstufen()[-1])
+    data$result <- unbANOVA::unbalancedANOVA(means = data$work$means, freq = data$work$freq, k.levels = Faktorstufen()[-1], type = c("I", "II", "III", if(includeATE()) "ATE"))
 
     output$Attributes <- shiny::renderUI(shiny::fluidRow(
                           shiny::column(4, shiny::HTML(if(data$result$attr$isBalanced){"Data is <font color=\"#009000\"><b>balanced</b> <i class='fas fa-balance-scale'></i></font>"}else{"Data is <font color=\"#A00000\"><b>not balanced</b> <i class='fas fa-balance-scale-left'></i></font>"})),
                           shiny::column(4, shiny::HTML(if(data$result$attr$isProportional){"Data is <font color=\"#009000\"><b>proportional</b> <i class='fas fa-percentage'></i></font>"}else{"Data is <font color=\"#A00000\"><b>not proportional</b> <i class='fas fa-percentage'></i></font>"})),
                           shiny::column(4, shiny::HTML(if(data$result$attr$isInteractionfree){"Data has <font color=\"#009000\"><b>no x-K-interaction</b> <i class='fas fa-star-of-life'></i></font>"}else{"Data has <font color=\"#A00000\"><b>x-K-interaction</b> <i class='fas fa-star-of-life'></i></font>"}))
                          ))
-    output$MarginalMeans <- shiny::renderTable(summary(data$result)$`Marginal Means`, rownames = TRUE, width = "100%", bordered = FALSE, striped = TRUE, align = "r")
-    output$Effects <- shiny::renderTable(effects(data$result, reference.group = referenceGroup()), rownames = TRUE, width = "100%", bordered = FALSE, striped = TRUE, align = "r")
-    output$SumOfSquares <- shiny::renderTable(summary(data$result)$`Sum of Squares`, width = "80%", bordered = FALSE, align = "r")
+    output$MarginalMeans <- shiny::renderTable(summary(data$result)$`Marginal Means`, rownames = TRUE, width = "100%", bordered = FALSE, striped = TRUE, align = "r", digits = 3)
+    output$Effects <- shiny::renderTable(effects(data$result, reference.group = referenceGroup()), rownames = TRUE, width = "100%", bordered = FALSE, striped = TRUE, align = "r", digits = 3)
+    output$SumOfSquares <- shiny::renderTable(summary(data$result)$`Sum of Squares`, width = "80%", bordered = FALSE, align = "r", digits = 3)
 
     actions$freshstart <- FALSE
     actions$needscalculation <- FALSE

@@ -7,8 +7,8 @@ print.unbANOVA <- function(g){
 #' @export
 summary.unbANOVA <- function(g){
   ans <- list()
-  ans$`Marginal Means` <- cbind(`ANOVA I` = g$anova1$marginalMeans, `ANOVA II` = g$anova2$marginalMeans, `ANOVA III` = g$anova3$marginalMeans, `ATE` = g$ATE$marginalMeans)
-  ans$`Sum of Squares` <- matrix(c(g$anova1$SS, g$anova2$SS, g$anova3$SS, g$ATE$SS), 1, dimnames = list("     ", c("ANOVA I", "ANOVA II", "ANOVA III", "ATE")))
+  ans$`Marginal Means` <- matrix(c(if(1 %in% g$call$type | "I" %in% g$call$type) g$anova1$marginalMeans, if(2 %in% g$call$type | "II" %in% g$call$type) g$anova2$marginalMeans, if(3 %in% g$call$type | "III" %in% g$call$type) g$anova3$marginalMeans, if("ATE" %in% g$call$type) g$ATE$marginalMeans), nrow = g$call$x.levels, dimnames = list(paste0("X = ", 1:g$call$x.levels), c(if(1 %in% g$call$type | "I" %in% g$call$type) "ANOVA I", if(2 %in% g$call$type | "II" %in% g$call$type) "ANOVA II", if(3 %in% g$call$type | "III" %in% g$call$type) "ANOVA III", if("ATE" %in% g$call$type) "ATE")))
+  ans$`Sum of Squares` <- matrix(c(if(1 %in% g$call$type | "I" %in% g$call$type) g$anova1$SS, if(2 %in% g$call$type | "II" %in% g$call$type) g$anova2$SS, if(3 %in% g$call$type | "III" %in% g$call$type) g$anova3$SS, if("ATE" %in% g$call$type) g$ATE$SS), nrow = 1, dimnames = list("     ", c(if(1 %in% g$call$type | "I" %in% g$call$type) "ANOVA I", if(2 %in% g$call$type | "II" %in% g$call$type) "ANOVA II", if(3 %in% g$call$type | "III" %in% g$call$type) "ANOVA III", if("ATE" %in% g$call$type) "ATE")))
   ans$`Is data balanced?` <- g$attr$isBalanced
   ans$`Is data proportional?` <- g$attr$isProportional
   ans$`Is data free of interaction?` <- g$attr$isInteractionfree
