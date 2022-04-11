@@ -5,7 +5,7 @@
 #' @export
 #' @import data.table
 #' 
-unbanovaShiny <- function(){
+unbanovaShiny2 <- function(){
 library(data.table)
   
 #### modules ####
@@ -90,6 +90,24 @@ ui = shiny::fluidPage(
       shiny::tabsetPanel(id = "inputs",
         shiny::tabPanel("Theoretical Analysis",
           shiny::tabsetPanel(id = "theoretical_analysis",
+            shiny::tabPanel("load in sets [optional]",
+              shiny::tabsetPanel(
+                shiny::tabPanel("examples",
+                    shiny::br(),
+                    shiny::selectInput("exampledata", label = NULL, choices = list("example data" = "",
+                                                                                   "2 x 2" = "two_x_two",
+                                                                                   "3 x 2 x 3" = "three_x_two_x_three",
+                                                                                   "Maxwell, Delaney & Kelley (2017; p.361)" = "MaxDelKel2017_p361",
+                                                                                   "Maxwell, Delaney & Kelley (2017; p.376)" = "MaxDelKel2017_p376")
+                    ),
+                    shiny::uiOutput("source")
+                ),
+                shiny::tabPanel("upload set",
+                    shiny::br(),
+                    shiny::fileInput("importset", NULL, accept = ".rds", width = "100%"),
+                )
+              )                      
+            ),
             shiny::tabPanel("Levels",
               shiny::br(),
               shiny::numericInput("fact_1", paste0("number of levels of treatment X"), 2, min = 2, max = 5, step = 1),
@@ -102,23 +120,6 @@ ui = shiny::fluidPage(
                 tippy::tippy(shinyjs::hidden(shiny::actionLink("hide", NULL, icon = shiny::icon("minus-square"))), content = "remove covariate", placement = "left", animation = "shift-away", arrow = TRUE),
                 shiny::HTML("&nbsp;&nbsp;&nbsp;"),
                 tippy::tippy(shiny::actionLink("add", NULL, icon = shiny::icon("plus-square")), content = "add covariate", placement = "right", animation = "shift-away", arrow = TRUE)
-              ),
-              shiny::hr(),
-              shiny::tabsetPanel(
-                shiny::tabPanel("examples",
-                  shiny::br(),
-                  shiny::selectInput("exampledata", label = NULL, choices = list("example data" = "",
-                                                                                 "2 x 2" = "two_x_two",
-                                                                                 "3 x 2 x 3" = "three_x_two_x_three",
-                                                                                 "Maxwell, Delaney & Kelley (2017; p.361)" = "MaxDelKel2017_p361",
-                                                                                 "Maxwell, Delaney & Kelley (2017; p.376)" = "MaxDelKel2017_p376")
-                  ),
-                  shiny::uiOutput("source")
-                ),
-                shiny::tabPanel("upload set",
-                  shiny::br(),
-                  shiny::fileInput("importset", NULL, accept = ".rds", width = "100%"),
-                )
               )
             ),
             shiny::tabPanel("Means & Frequencies",
@@ -129,7 +130,9 @@ ui = shiny::fluidPage(
               shiny::strong("freqs:"),
               rhandsontable::rHandsontableOutput("matrixfreqs"),
               shiny::hr(),
-              shiny::downloadButton("downloadable_data")
+              shiny::downloadButton("downloadable_data"),
+              shiny::hr(),
+              shiny::actionButton("analyse_theoretical", "Analyse", icon = icon("calculator"))
         ))),
         shiny::tabPanel("Empirical Analysis",
           shiny::br(),
@@ -155,9 +158,12 @@ ui = shiny::fluidPage(
           shiny::fluidRow(shiny::column(6, shiny::textOutput("design")), shiny::column(6, shiny::uiOutput("overviewIsBalanced"))),
           shiny::fluidRow(shiny::column(6, shiny::div("number of cells: ", shiny::textOutput("countcells", inline = TRUE))), shiny::column(6, shiny::uiOutput("overviewIsProportional"))),
           shiny::fluidRow(shiny::column(6, shiny::div("N = ", shiny::textOutput("sumfreq", inline = TRUE))), shiny::column(6, shiny::uiOutput("overviewIsInteractionfree"))),
-          shiny::uiOutput("means"),
-          shiny::uiOutput("freqs"),
-          shiny::uiOutput("if_freqs")
+          shiny::h3("means"),
+          shiny::tableOutput("means_table"),
+          shiny::h3("frequencies"),
+          shiny::tableOutput("freqs_table"),
+          shiny::h3("X-K-interactionfree means (estimated)"),
+          shiny::tableOutput("if_means_table")
         ),
         #shiny::tabPanel("PrintResult",
         #  shiny::verbatimTextOutput("printresult")
@@ -188,7 +194,9 @@ server = function(input, output, session){
   actions <- reactiveValues(freshstart = TRUE,
                             freshupload = FALSE,
                             freshchangeoflevels = FALSE)
-
+  
+  mode <- reactiveVal()
+  
   #### . input stuff ####
   nrofcov <- shiny::reactiveVal(value = 1)
 
@@ -228,14 +236,6 @@ server = function(input, output, session){
       })
   })
 
-  shiny::observeEvent({
-    Faktorstufen()
-  },{
-    shiny::req(!actions$freshupload)
-    actions$freshchangeoflevels <- TRUE
-    actions$needscalculation <- TRUE
-  })
-
   dimnames <- shiny::reactive({
     if(!is.null(Faktorstufen())){
        list(paste0("X = ", 1:Faktorstufen()[1]), do.call(paste0, rlist::list.flatten(rlist::list.expand(sapply(1:length(Faktorstufen()[-1]), function(i){paste0("K<sub>",i,"</sub> = ", rep(1:Faktorstufen()[-1][i], each = prod(Faktorstufen()[-1][-c(1:i)])))}, simplify = FALSE), list(c("<br>"))))[1:(length(Faktorstufen()[-1]) * 2- 1)]))
@@ -253,7 +253,7 @@ server = function(input, output, session){
 
   output$matrixfreqs <- rhandsontable::renderRHandsontable({
     shiny::req(Faktorstufen(), stored$freqs)
-    #the validator makes sure that input is non-zero, positive integer < 1000 // type and format reduce to integer and non comma number
+    #the validator makes sure that input is non-zero, positive integer < 10000000 // type and format reduce to integer and non comma number
     rhandsontable::hot_table(rhandsontable::hot_col(rhandsontable::rhandsontable(structure(matrix(stored$freqs, nrow = Faktorstufen()[1], ncol = prod(Faktorstufen()[-1])), dimnames = dimnames())), 1:prod(Faktorstufen()[-1]), validator = "function (value, callback) {if (value === null || value === void 0) {value = '';} if (this.allowEmpty && value === '') {return callback(true);} else if (value === '') {return callback(false);} let isNumber = /^[1-9]\\d{0,6}$/.test(value); if (!isNumber) {return callback(false);} if (isNaN(parseFloat(value))) {return callback(false);} return callback(true);}", allowInvalid = FALSE, type = "numeric", format = "0,0"), contextMenu = FALSE, stretchH = "all")
   })
 
@@ -268,68 +268,9 @@ server = function(input, output, session){
     as.numeric(input$referenceGroup)
   })
 
-  #### . overview ####
-  output$countcells <- shiny::renderText(prod(Faktorstufen()))
-  output$sumfreq <- shiny::renderText(sum(data$work$freq))
-  output$design <- shiny::renderText(paste0(paste0(Faktorstufen(), collapse = " x "), " - Design"))
-
-  output$means_table <- shiny::renderTable({
-    shiny::req(!actions$freshupload,
-               nrow(data$work$freq) == length(dimnames()[[1]]), ncol(data$work$freq) == length(dimnames()[[2]]))
-    structure(data$work$means, dimnames = dimnames())
-  }, rownames = TRUE, bordered = TRUE, digits = 3, sanitize.text.function = function(x) x)
-
-  output$freqs_table <- shiny::renderTable({
-    shiny::req(!actions$freshupload,
-               nrow(data$work$freq) == length(dimnames()[[1]]), ncol(data$work$freq) == length(dimnames()[[2]]))
-    structure(cbind(rbind(data$work$freq, colSums(data$work$freq)), rowSums(rbind(data$work$freq, colSums(data$work$freq)))), dimnames = lapply(dimnames(), function(x){rlist::list.append(x, "&#931;")}))
-  }, rownames = TRUE, bordered = TRUE, digits = 0, sanitize.text.function = function(x) x)
-
-  output$if_means_table <- shiny::renderTable({
-    shiny::req(!actions$freshupload, !actions$needscalculation)
-    structure(data$result$attr$interactionfreeMeans, dimnames = dimnames())
-  }, rownames = TRUE, bordered = TRUE, digits = 3, sanitize.text.function = function(x) x)
-
-  output$overviewIsBalanced <- shiny::renderUI({
-                                shiny::req(data$result)
-                                shiny::HTML(if(data$result$attr$isBalanced){"Data is <font color=\"#009000\"><b>balanced</b> <i class='fas fa-balance-scale'></i></font>"}else{"Data is <font color=\"#A00000\"><b>not balanced</b> <i class='fas fa-balance-scale-left'></i></font>"})
-                               })
-  output$overviewIsProportional <- shiny::renderUI({
-                                    shiny::req(data$result)
-                                    shiny::HTML(if(data$result$attr$isProportional){"Data is <font color=\"#009000\"><b>proportional</b> <i class='fas fa-percentage'></i></font>"}else{"Data is <font color=\"#A00000\"><b>not proportional</b> <i class='fas fa-percentage'></i></font>"})
-                                   })
-  output$overviewIsInteractionfree <- shiny::renderUI({
-                                       shiny::req(data$result)
-                                       shiny::HTML(if(data$result$attr$isInteractionfree){"Data has <font color=\"#009000\"><b>no x-K-interaction</b> <i class='fas fa-star-of-life'></i></font>"}else{"Data has <font color=\"#A00000\"><b>x-K-interaction</b> <i class='fas fa-star-of-life'></i></font>"})
-                                      })
-
-  output$means <- shiny::renderUI({
-    shiny::req(data$work$means)
-    shiny::div(
-      shiny::h3("means"),
-      shiny::tableOutput("means_table")
-    )
-  })
-
-  output$freqs <- shiny::renderUI({
-    shiny::req(data$work$freq)
-    shiny::div(
-      shiny::h3("frequencies"),
-      shiny::tableOutput("freqs_table")
-    )
-  })
-
-  output$if_freqs <- shiny::renderUI({
-    shiny::req(data$result$attr$interactionfreeMeans)
-    shiny::div(
-      shiny::h3("X-K-interactionfree means (estimated)"),
-      shiny::tableOutput("if_means_table")
-    )
-  })
-
   #### . data stuff ####
   data <- shiny::reactiveValues()
-
+  
   shiny::observeEvent({
     input$matrixmeans
     input$matrixfreqs
@@ -338,35 +279,8 @@ server = function(input, output, session){
     stored$freqs <- rhandsontable::hot_to_r(input$matrixfreqs)
   })
 
-  # shiny::observeEvent({
-  #   
-  # },{
-  #   shiny::req(actions$freshchangeoflevels |  actions$freshchangemeansorfreqs)
-  #   
-  #   
-  #   
-  #   
-  #   # stored$means 
-  #   # stored$freqs 
-  #   
-  #   actions$freshupload <- TRUE
-  # })
-
   shiny::observeEvent({
-    actions$freshchangeoflevels
-  },{
-    shiny::req(actions$freshchangeoflevels)
-
-    stored$means <- 50.001
-    stored$freqs <- 10
-
-    actions$freshchangeoflevels <- FALSE
-  })
-
-  shiny::observeEvent({
-    Faktorstufen()
-    stored$means
-    stored$freqs
+    input$analyse_theoretical
   },{
     shiny::req(Faktorstufen(), stored$means, stored$freqs)
 
@@ -377,10 +291,12 @@ server = function(input, output, session){
 
     data$work <- list(
       means = matrix(stored$means, nrow = Faktorstufen()[1], ncol = prod(Faktorstufen()[-1]), dimnames = dimnames()),
-      freq = matrix(stored$freqs, nrow = Faktorstufen()[1], ncol = prod(Faktorstufen()[-1]), dimnames = dimnames())
+      freq = matrix(stored$freqs, nrow = Faktorstufen()[1], ncol = prod(Faktorstufen()[-1]), dimnames = dimnames()),
+      levels = Faktorstufen(),
+      dimnames = dimnames()
     )
-
-    actions$needscalculation <- TRUE
+    
+    mode("theoretical")
   })
 
   output$downloadable_data <- shiny::downloadHandler(
@@ -389,11 +305,57 @@ server = function(input, output, session){
        saveRDS(list(
            means = data$work$means,
            freq = data$work$freq,
-           k = Faktorstufen()[-1]
+           k = data$work$levels[-1]
        ), file = file)
     }
   )
-
+  
+  #### . overview ####
+  output$countcells <- shiny::renderText({
+    shiny::req(data$work)
+    prod(data$work$levels)
+  })
+  
+  output$sumfreq <- shiny::renderText({
+    shiny::req(data$work)
+    sum(data$work$freq)
+  })
+  
+  output$design <- shiny::renderText({
+    shiny::req(data$work)
+    paste0(paste0(data$work$levels, collapse = " x "), " - Design")
+  })
+    
+  output$means_table <- shiny::renderTable({
+    shiny::req(data$work)
+    structure(data$work$means, dimnames = data$work$dimnames)
+  }, rownames = TRUE, bordered = TRUE, digits = 3, sanitize.text.function = function(x) x)
+  
+  output$freqs_table <- shiny::renderTable({
+    shiny::req(data$work)
+    structure(cbind(rbind(data$work$freq, colSums(data$work$freq)), rowSums(rbind(data$work$freq, colSums(data$work$freq)))), dimnames = lapply(data$work$dimnames, function(x){rlist::list.append(x, "&#931;")}))
+  }, rownames = TRUE, bordered = TRUE, digits = 0, sanitize.text.function = function(x) x)
+  
+  output$if_means_table <- shiny::renderTable({
+    shiny::req(data$work, data$result$attr)
+    structure(data$result$attr$interactionfreeMeans, dimnames = data$work$dimnames)
+  }, rownames = TRUE, bordered = TRUE, digits = 3, sanitize.text.function = function(x) x)
+  
+  output$overviewIsBalanced <- shiny::renderUI({
+    shiny::req(data$work, data$result$attr)
+    shiny::HTML(if(data$result$attr$isBalanced){"Data is <font color=\"#009000\"><b>balanced</b> <i class='fas fa-balance-scale'></i></font>"}else{"Data is <font color=\"#A00000\"><b>not balanced</b> <i class='fas fa-balance-scale-left'></i></font>"})
+  })
+  
+  output$overviewIsProportional <- shiny::renderUI({
+    shiny::req(data$work, data$result$attr)
+    shiny::HTML(if(data$result$attr$isProportional){"Data is <font color=\"#009000\"><b>proportional</b> <i class='fas fa-percentage'></i></font>"}else{"Data is <font color=\"#A00000\"><b>not proportional</b> <i class='fas fa-percentage'></i></font>"})
+  })
+  
+  output$overviewIsInteractionfree <- shiny::renderUI({
+    shiny::req(data$work, data$result$attr)
+    shiny::HTML(if(data$result$attr$isInteractionfree){"Data has <font color=\"#009000\"><b>no x-K-interaction</b> <i class='fas fa-star-of-life'></i></font>"}else{"Data has <font color=\"#A00000\"><b>x-K-interaction</b> <i class='fas fa-star-of-life'></i></font>"})
+  })
+  
   #### . results ####
   includeATE <- shiny::reactive({if(is.null(input$includeATE)){FALSE}else{input$includeATE}})
   
@@ -401,7 +363,7 @@ server = function(input, output, session){
     includeATE()
     data$work
   },{
-    data$result <- unbANOVA::unbalancedANOVA(means = data$work$means, freq = data$work$freq, k.levels = Faktorstufen()[-1], type = c("I", "II", "III", if(includeATE()) "ATE"))
+    data$result <- unbANOVA::unbalancedANOVA(means = data$work$means, freq = data$work$freq, k.levels = data$work$levels[-1], type = c("I", "II", "III", if(includeATE()) "ATE"))
 
     output$Attributes <- shiny::renderUI(shiny::fluidRow(
                           shiny::column(4, shiny::HTML(if(data$result$attr$isBalanced){"Data is <font color=\"#009000\"><b>balanced</b> <i class='fas fa-balance-scale'></i></font>"}else{"Data is <font color=\"#A00000\"><b>not balanced</b> <i class='fas fa-balance-scale-left'></i></font>"})),
@@ -411,9 +373,6 @@ server = function(input, output, session){
     output$MarginalMeans <- shiny::renderTable(summary(data$result)$`Marginal Means`, rownames = TRUE, width = "100%", bordered = FALSE, striped = TRUE, align = "r", digits = 3)
     output$Effects <- shiny::renderTable(effects(data$result, reference.group = referenceGroup()), rownames = TRUE, width = "100%", bordered = FALSE, striped = TRUE, align = "r", digits = 3)
     output$SumOfSquares <- shiny::renderTable(summary(data$result)$`Sum of Squares`, width = if(includeATE()) "80%" else "75%", bordered = FALSE, align = "r", digits = 3)
-
-    actions$freshstart <- FALSE
-    actions$needscalculation <- FALSE
   })
 
   output$printresult <- shiny::renderPrint({ # used for result checking
@@ -423,38 +382,41 @@ server = function(input, output, session){
   })
 
   #### . display results ####
-  showMeans <- shiny::reactive({if(is.null(input$showMeans)){TRUE}else{input$showMeans}})
-  showEffects <- shiny::reactive({if(is.null(input$showEffects)){FALSE}else{input$showEffects}})
-  showSS <- shiny::reactive({if(is.null(input$showSS)){TRUE}else{input$showSS}})
-
-  output$marginalMeansDisplay <- shiny::renderUI({
+  shiny::observeEvent({
+    data$work
+  },{
     shiny::req(data$result)
-    if(showMeans()){
-     shiny::div(
-       shiny::h3("Marginal Means"),
-       shiny::tableOutput("MarginalMeans")
-     )
-    }
-  })
-
-  output$effectsDisplay <- shiny::renderUI({
-    shiny::req(data$result)
-    if(showEffects()){
-     shiny::div(
-       shiny::h3("Effects"),
-       shiny::tableOutput("Effects")
-     )
-    }
-  })
-
-  output$SSDisplay <- shiny::renderUI({
-    shiny::req(data$result)
-    if(showSS()){
-     shiny::div(
-       shiny::h3("Sum of Squares"),
-       shiny::tableOutput("SumOfSquares")
-     )
-    }
+      
+    showMeans <- shiny::reactive({if(is.null(input$showMeans)){TRUE}else{input$showMeans}})
+    showEffects <- shiny::reactive({if(is.null(input$showEffects)){FALSE}else{input$showEffects}})
+    showSS <- shiny::reactive({if(is.null(input$showSS)){TRUE}else{input$showSS}})
+      
+    output$marginalMeansDisplay <- shiny::renderUI({
+      if(showMeans()){
+        shiny::div(
+          shiny::h3("Marginal Means"),
+          shiny::tableOutput("MarginalMeans")
+        )
+      }
+    })
+      
+    output$effectsDisplay <- shiny::renderUI({
+      if(showEffects()){
+        shiny::div(
+          shiny::h3("Effects"),
+          shiny::tableOutput("Effects")
+        )
+      }
+    })
+      
+    output$SSDisplay <- shiny::renderUI({
+      if(showSS()){
+        shiny::div(
+          shiny::h3("Sum of Squares"),
+          shiny::tableOutput("SumOfSquares")
+        )
+      }
+    })
   })
 
   #### . import ####
@@ -485,7 +447,7 @@ server = function(input, output, session){
   shiny::observeEvent({
     data$d
   },{
-    shiny::req(data$d)
+    shiny::req(data$d, mode() == "theoretical")
 
     shiny::updateNumericInput(session, inputId = "fact_1", value = nrow(data$d$means))
 
@@ -573,7 +535,7 @@ server = function(input, output, session){
       shiny::div(style = "display:inline-block;",
         tippy::tippy(shiny::actionButton("checkempiricaldata", label = "", icon = icon("question-circle")), content = "show datatable as read", placement = "right", animation = "shift-away", arrow = TRUE),
         tippy::tippy(shiny::actionButton("checkreaddata", label = "", icon = icon("question-circle")), content = "show calculated means and freqs", placement = "right", animation = "shift-away", arrow = TRUE),
-        tippy::tippy(shiny::actionButton("empiricalimport", label = "", icon = icon("upload")), content = "import data", placement = "right", animation = "shift-away", arrow = TRUE)
+        shiny::div(style = "float:right;", tippy::tippy(shiny::actionButton("analyse_empirical", label = "Analyse", icon = icon("calculator")), content = "import data", placement = "right", animation = "shift-away", arrow = TRUE))
       )
     )
   })
@@ -632,9 +594,9 @@ server = function(input, output, session){
   })
 
   shiny::observeEvent({
-    input$empiricalimport
+    input$analyse_empirical
   },{
-    shiny::req(input$empiricalimport)
+    shiny::req(input$analyse_empirical)
     
     data$d <- data$a()
     
@@ -644,11 +606,13 @@ server = function(input, output, session){
       temp[[x]] <<- factor(temp[[x]])
     })
     stored$empirical <- temp
+    
+    mode("empirical")
   })
   
   output$empiricalresults <- shiny::renderUI({
-    if(is.null(stored$empirical)) {
-      "use 'upload empirical data' in the 'Levels' tab to see empirical results"
+    if(is.null(stored$empirical) || mode() == "theoretical") {
+      "Please use the 'empirical analysis' tab to see these results. You either have not clicked 'Analyse' on the 'empirical analysis' tab or you are looking at theoretical results, in which case this tab is meaningless to you."
     } else {
       shiny::div(
         shiny::h3("ANOVA I (stats package)"),
@@ -659,6 +623,21 @@ server = function(input, output, session){
         shiny::renderPrint(car::Anova(lm(Y ~ X*K1, data = stored$empirical, contrasts = list(X = "contr.helmert", K1 = "contr.helmert")), type = 3))
       )
     }
+  })
+  
+  shiny::observeEvent({
+    input$analyse_empirical
+  },{
+    shiny::req(data$a())
+    
+    fs_temp <- c(length(unique(data$b()$X)), data$a()$k)
+    
+    data$work <- list(
+      means = data$a()$means,
+      freq = data$a()$freq,
+      levels = fs_temp,
+      dimnames = list(paste0("X = ", 1:fs_temp[1]), do.call(paste0, rlist::list.flatten(rlist::list.expand(sapply(1:length(fs_temp[-1]), function(i){paste0("K<sub>",i,"</sub> = ", rep(1:fs_temp[-1][i], each = prod(fs_temp[-1][-c(1:i)])))}, simplify = FALSE), list(c("<br>"))))[1:(length(fs_temp[-1]) * 2- 1)]))
+    )
   })
   
   #### . graph stuff ####

@@ -3,10 +3,7 @@ Title: Compare ANOVA Types & Learn About their Differences in Unbalanced
     Designs.
 Version: 0.9
 Authors@R: 
-    person(given = "Alexander J.",
-           family = "Schauerte",
-           role = c("aut", "cre"),
-           email = "alexander.joseph.schauerte@uni-jena.de")
+    person("Alexander J.", "Schauerte", , "alexander.joseph.schauerte@uni-jena.de", role = c("aut", "cre"))
 Description: This package provides tools to compare the results of ANOVA
     type I, II and III and the average treatment effect in unbalanced
     designs.
@@ -15,19 +12,20 @@ License: `use_mit_license()`, `use_gpl3_license()` or friends to pick a
 Depends: 
     R (>= 4.0.0)
 Encoding: UTF-8
-LazyData: true
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.1.1
+RoxygenNote: 7.1.2
 Imports: 
-    rlist (>= 0.4.6.1),
-    rhandsontable (>= 0.3.7),
+    data.table (>= 1.14.2),
+    DT (>= 0.16),
+    ggplot2 (>= 3.3.2),
     matrixcalc (>= 1.0-3),
     purrr (>= 0.3.4),
-    ggplot2 (>= 3.3.2),
+    rhandsontable (>= 0.3.7),
+    rlist (>= 0.4.6.1),
     shiny (>= 1.5),
-    shinythemes (>= 1.1.2),
-    shinyjs (>= 1.1),
     shinycssloaders (>= 0.3),
+    shinyjs (>= 1.1),
+    shinythemes (>= 1.1.2),
     shinyWidgets (>= 0.5.3),
     tippy (>= 1.0.0)
 Remotes:  
